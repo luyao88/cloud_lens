@@ -1,6 +1,6 @@
 # 镜云
 
-English | [简体中文](https://github.com/mayazhou2009/cloud_lens_main/blob/main/README_CN.md)
+English | [简体中文](https://github.com/luyao88/cloud_lens/blob/main/README_CN.md)
 
 > In the modern Internet environment, fast and stable image access is one of the important factors to improve user experience. This article will introduce how to use Cloudflare Pages to deploy a stable unlimited image bed Imgur, realize image upload and access, and further accelerate through WordPress's WP.COM global image cache to improve image loading speed. It can be used for free image hosting solutions, alternatives such as Flickr.
 
@@ -26,11 +26,11 @@ English | [简体中文](https://github.com/mayazhou2009/cloud_lens_main/blob/ma
 
 Vercel Automated Deployment
 
-[![镜云](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/mayazhou2009/cloud_lens_main)
+[![镜云](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/luyao88/cloud_lens)
 
 Cloudflare Pages automatic deployment
 
-[![镜云](https://deploy.workers.cloudflare.com/button)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create/deploy-to-workers&repository=https://github.com/mayazhou2009/cloud_lens_main)
+[![镜云](https://deploy.workers.cloudflare.com/button)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create/deploy-to-workers&repository=https://github.com/luyao88/cloud_lens)
 
 **Manual Deployment**
 
@@ -56,4 +56,4 @@ Cloudflare Pages automatic deployment
 
 ### Project address
 
-[CloudLens - Github](https://github.com/mayazhou2009/cloud_lens_main)
+[CloudLens - Github](https://github.com/luyao88/cloud_lens)

@@ -2,7 +2,7 @@
 
 > 在现代互联网环境中，快速稳定的图片访问是提升用户体验的重要因素之一。本文将介绍如何利用Cloudflare Pages部署稳定的无限图床Imgur，实现图片上传和访问，并进一步通过WordPress的WP.COM全球图片缓存进行加速，提高图片加载速度。可用于免费图片托管解决方案，Flickr 等替代品。
 
-[English](https://github.com/mayazhou2009/cloud_lens_main) | 简体中文
+[English](https://github.com/luyao88/cloud_lens) | 简体中文
 
 ## 简介
 
@@ -26,11 +26,11 @@
 
 Vercel 自动部署
 
-[![镜云](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/mayazhou2009/cloud_lens_main)
+[![镜云](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/luyao88/cloud_lens)
 
 Cloudflare Pages 自动部署
 
-[![镜云](https://deploy.workers.cloudflare.com/button)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create/deploy-to-workers&repository=https://github.com/mayazhou2009/cloud_lens_main)
+[![镜云](https://deploy.workers.cloudflare.com/button)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create/deploy-to-workers&repository=https://github.com/luyao88/cloud_lens)
 
 **手动部署**
 
@@ -56,4 +56,4 @@ Cloudflare Pages 自动部署
 
 ### 项目地址
 
-[CloudLens - Github](https://github.com/mayazhou2009/cloud_lens_main)
+[CloudLens - Github](https://github.com/luyao88/cloud_lens)

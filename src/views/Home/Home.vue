@@ -6,7 +6,7 @@
         <p class="pt-2">无限图片储存数量，你可以上传不限数量的图片！</p>
         <p>图片首次访问后缓存，"永久"有效，包括全球分布的 CDN，以确保尽可能快地提供图像.</p>
         <p>镜云 是 <a class="text-slate-400" href="https://190223.xyz" target="_blank" title="Sᴜᴘᴇʀᴍᴀ'∫Bʟᴏɢ | superma的博客">Sᴜᴘᴇʀᴍᴀ'∫Bʟᴏɢ</a> 支持并维护的文件上传项目，致力于为用户提供稳定的永久存储服务。</p>
-        <p style="font-weight: bold">开源地址: <a class="text-[#0969da]" href="https://github.com/mayazhou2009/cloud_lens_main" target="_blank">CloudLens</a></p>
+        <p style="font-weight: bold">开源地址: <a class="text-[#0969da]" href="https://github.com/luyao88/cloud_lens" target="_blank">CloudLens</a></p>
       </AlertDescription>
     </Alert>
 
