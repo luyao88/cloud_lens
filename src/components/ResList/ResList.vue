@@ -10,6 +10,7 @@
       <div class="value" :class="{ active: !i.upload_result }">
         <p><input :value="i.upload_result ? formatURL(props, i.upload_result) : ''" type="text" readonly @click="i.upload_result && copyCodeValue(formatURL(props, i.upload_result))" /> <span>URL</span></p>
         <p><input :value="i.upload_result ? formatURL(props, i.upload_result, 'md') : ''" type="text" readonly @click="i.upload_result && copyCodeValue(formatURL(props, i.upload_result, 'md'))" /> <span>Markdown</span></p>
+        <p><input :value="i.upload_result ? formatURL(props, i.upload_result, 'html') : ''" type="text" readonly @click="i.upload_result && copyCodeValue(formatURL(props, i.upload_result, 'html'))" /> <span>HTML</span></p>
       </div>
       <HoverCard v-if="i.upload_result" :open-delay="0" :close-delay="0">
         <HoverCardTrigger as-child>

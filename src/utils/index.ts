@@ -5,10 +5,14 @@ const formatURL = (props: any, v: any, key?: string) => {
   try {
     FILE_ID = v.data.link.split('/').slice(-1)[0];
   } catch { }
+  const url = `${props.nodeHost}/v2/${FILE_ID}`;
   if (key == 'md') {
-    return FILE_ID ? `![${v._vh_filename}](${props.nodeHost}/v2/${FILE_ID})` : ERROR_MSG;
+    return FILE_ID ? `![${v._vh_filename}](${url})` : ERROR_MSG;
   }
-  return FILE_ID ? `${props.nodeHost}/v2/${FILE_ID}` : ERROR_MSG;
+  if (key == 'html') {
+    return FILE_ID ? `<img src="${url}" alt="${v._vh_filename}">` : ERROR_MSG;
+  }
+  return FILE_ID ? url : ERROR_MSG;
 };
 
 export { formatURL }

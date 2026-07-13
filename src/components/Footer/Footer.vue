@@ -1,41 +1,21 @@
 <template>
-  <footer class="w-full max-w-[1666px] mt-36 pb-4">
-    <main class="m-auto pt-4 flex flex-col-reverse md:flex-row justify-between gap-2 md:gap-16 w-full max-w-[1666px] border-t">
-      <section class="[&>p]:text-xs [&>p]:w-full [&>p]:py-[6px] [&>p]:text-center md:[&>p]:text-left [&>p>a]:text-slate-400">
-        <p>镜云 是 <a href="https://190223.xyz" target="_blank" title="Sᴜᴘᴇʀᴍᴀ'∫Bʟᴏɢ | superma的博客">Sᴜᴘᴇʀᴍᴀ'∫Bʟᴏɢ</a> 支持并维护的文件上传项目，致力于为用户提供稳定的永久存储服务。</p>
-        <p class="text-red-600">注意:上传违反中国大陆、香港及美国法律的图片将会直接删除，并封禁设备IP。</p>
-        <p class="flex gap-2 justify-center md:justify-start">
-          <a href="https://pages.cloudflare.com" target="_blank">
-            <img
-              src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB3aWR0aD0iMTkxIiBoZWlnaHQ9IjIwIiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IkZyYW1ld29yazogQ2xvdWRmbGFyZSBQYWdlcyI+PHRpdGxlPkZyYW1ld29yazogQ2xvdWRmbGFyZSBQYWdlczwvdGl0bGU+PGxpbmVhckdyYWRpZW50IGlkPSJzIiB4Mj0iMCIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2JiYiIgc3RvcC1vcGFjaXR5PSIuMSIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1vcGFjaXR5PSIuMSIvPjwvbGluZWFyR3JhZGllbnQ+PGNsaXBQYXRoIGlkPSJyIj48cmVjdCB3aWR0aD0iMTkxIiBoZWlnaHQ9IjIwIiByeD0iMyIgZmlsbD0iI2ZmZiIvPjwvY2xpcFBhdGg+PGcgY2xpcC1wYXRoPSJ1cmwoI3IpIj48cmVjdCB3aWR0aD0iODgiIGhlaWdodD0iMjAiIGZpbGw9IiNjM2MzYzMiLz48cmVjdCB4PSI4OCIgd2lkdGg9IjEwMyIgaGVpZ2h0PSIyMCIgZmlsbD0iIzEyMzhhMyIvPjxyZWN0IHdpZHRoPSIxOTEiIGhlaWdodD0iMjAiIGZpbGw9InVybCgjcykiLz48L2c+PGcgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IlZlcmRhbmEsR2VuZXZhLERlamFWdSBTYW5zLHNhbnMtc2VyaWYiIHRleHQtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iIGZvbnQtc2l6ZT0iMTEwIj48aW1hZ2UgeD0iNSIgeT0iMyIgd2lkdGg9IjE0IiBoZWlnaHQ9IjE0IiB4bGluazpocmVmPSJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUJtYVd4c1BTSWpSak00TURJd0lpQnliMnhsUFNKcGJXY2lJSFpwWlhkQ2IzZzlJakFnTUNBeU5DQXlOQ0lnZUcxc2JuTTlJbWgwZEhBNkx5OTNkM2N1ZHpNdWIzSm5Mekl3TURBdmMzWm5JajQ4ZEdsMGJHVStRMnh2ZFdSbWJHRnlaU0JRWVdkbGN6d3ZkR2wwYkdVK1BIQmhkR2dnWkQwaVRURXdMamN4TlNBeE5DNHpNa2cxTGpRME1td3RMalkwTFRFdU1qQXpUREV6TGpZM015QXdiREV1TXprM0xqVTNPUzB4TGpjMU1pQTVMakV4TW1nMUxqSTBiQzQyTkRnZ01TNHhPVEpNTVRBdU56RTVJREkwYkMweExqUXhNaTB1TlRSYVRUUXVNRGt4SURVdU5EUTRZUzQxTnpnM0xqVTNPRGNnTUNBeElERWdNQzB4TGpFMU56UXVOVGM0Tnk0MU56ZzNJREFnTUNBeElEQWdNUzR4TlRjMGVtMHhMalUwTXlBd1lTNDFOemczTGpVM09EY2dNQ0F4SURFZ01DMHhMakUxTnpRdU5UYzROeTQxTnpnM0lEQWdNQ0F4SURBZ01TNHhOVGMwZW0weExqVTBOQ0F3WVM0MU56ZzNMalUzT0RjZ01DQXhJREVnTUMweExqRTFOelF1TlRjNE55NDFOemczSURBZ01DQXhJREFnTVM0eE5UYzBlbTA0TGpZMU55MHlMamRvTlM0ME1qUnNMamMzTWk0M056RjJNVFl1T1RjMWJDMHVOemN5TGpjM01tZ3ROeTR6T1RKc0xqTTNOQzB1TlRjNWFEWXVOemM1YkM0ME16SXRMalF6TWxZekxqYzFPR3d0TGpRek1pMHVORE15YUMwMExqWTNObXd0TGpVMU1pQXlMamcxYUMwdU5UbHNMalV5T1MweUxqZzNOeTR4TURndExqVTFNbHBOTWk0M05DQXlNUzR5TmpWc0xTNDNOekl0TGpjM01sWXpMalV4T0d3dU56Y3lMUzQzTnpGb055NDJOemRzTFM0ek9EWXVOVGM1U0RJdU9UaHNMUzQwTXpJdU5ETXlkakUyTGpRNU5td3VORE15TGpRek1tZzFMalU0Tm13dExqQTVNaTQxTnpsNmJURXVNVFUzTFRFdU9UTm9NeTR5T0d3dExqRXhOaTQxT0dndE15NDFOV3d0TGpFNU1pMHVNVGt6ZGkwekxqUTNNMnd1TlRjNElERXVNVFU0ZW0weE15NHhNVGNnTUNBdU5UYzVMalU0U0RFMExqZHNMak00TlMwdU5UaDZJaTgrUEM5emRtYysiLz48dGV4dCBhcmlhLWhpZGRlbj0idHJ1ZSIgeD0iNTM1IiB5PSIxNTAiIGZpbGw9IiNjY2MiIGZpbGwtb3BhY2l0eT0iLjMiIHRyYW5zZm9ybT0ic2NhbGUoLjEpIiB0ZXh0TGVuZ3RoPSI2MTAiPkZyYW1ld29yazwvdGV4dD48dGV4dCB4PSI1MzUiIHk9IjE0MCIgdHJhbnNmb3JtPSJzY2FsZSguMSkiIGZpbGw9IiMzMzMiIHRleHRMZW5ndGg9IjYxMCI+RnJhbWV3b3JrPC90ZXh0Pjx0ZXh0IGFyaWEtaGlkZGVuPSJ0cnVlIiB4PSIxMzg1IiB5PSIxNTAiIGZpbGw9IiMwMTAxMDEiIGZpbGwtb3BhY2l0eT0iLjMiIHRyYW5zZm9ybT0ic2NhbGUoLjEpIiB0ZXh0TGVuZ3RoPSI5MzAiPkNsb3VkZmxhcmUgUGFnZXM8L3RleHQ+PHRleHQgeD0iMTM4NSIgeT0iMTQwIiB0cmFuc2Zvcm09InNjYWxlKC4xKSIgZmlsbD0iI2ZmZiIgdGV4dExlbmd0aD0iOTMwIj5DbG91ZGZsYXJlIFBhZ2VzPC90ZXh0PjwvZz48L3N2Zz4="
-            />
-          </a>
-          <a href="https://www.cloudflare.com/zh-cn/application-services/products/cdn/" target="_blank">
-            <img
-              src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB3aWR0aD0iMTQ3IiBoZWlnaHQ9IjIwIiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IkNETjogQ2xvdWRmbGFyZSBDRE4iPjx0aXRsZT5DRE46IENsb3VkZmxhcmUgQ0ROPC90aXRsZT48bGluZWFyR3JhZGllbnQgaWQ9InMiIHgyPSIwIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjYmJiIiBzdG9wLW9wYWNpdHk9Ii4xIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLW9wYWNpdHk9Ii4xIi8+PC9saW5lYXJHcmFkaWVudD48Y2xpcFBhdGggaWQ9InIiPjxyZWN0IHdpZHRoPSIxNDciIGhlaWdodD0iMjAiIHJ4PSIzIiBmaWxsPSIjZmZmIi8+PC9jbGlwUGF0aD48ZyBjbGlwLXBhdGg9InVybCgjcikiPjxyZWN0IHdpZHRoPSI1MiIgaGVpZ2h0PSIyMCIgZmlsbD0iIzVjNWM1YyIvPjxyZWN0IHg9IjUyIiB3aWR0aD0iOTUiIGhlaWdodD0iMjAiIGZpbGw9IiNkY2QwOTUiLz48cmVjdCB3aWR0aD0iMTQ3IiBoZWlnaHQ9IjIwIiBmaWxsPSJ1cmwoI3MpIi8+PC9nPjxnIGZpbGw9IiNmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJWZXJkYW5hLEdlbmV2YSxEZWphVnUgU2FucyxzYW5zLXNlcmlmIiB0ZXh0LXJlbmRlcmluZz0iZ2VvbWV0cmljUHJlY2lzaW9uIiBmb250LXNpemU9IjExMCI+PGltYWdlIHg9IjUiIHk9IjMiIHdpZHRoPSIxNCIgaGVpZ2h0PSIxNCIgeGxpbms6aHJlZj0iZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCbWFXeHNQU0lqUmpNNE1ESXdJaUJ5YjJ4bFBTSnBiV2NpSUhacFpYZENiM2c5SWpBZ01DQXlOQ0F5TkNJZ2VHMXNibk05SW1oMGRIQTZMeTkzZDNjdWR6TXViM0puTHpJd01EQXZjM1puSWo0OGRHbDBiR1UrUTJ4dmRXUm1iR0Z5WlR3dmRHbDBiR1UrUEhCaGRHZ2daRDBpVFRFMkxqVXdPRGdnTVRZdU9EUTBOMk11TVRRM05TMHVOVEEyT0M0d09UQTRMUzQ1TnpBM0xTNHhOVFV6TFRFdU16RTFOQzB1TWpJME5pMHVNekUyTkMwdU5qQTBOUzB1TkRrNUxURXVNRFl4TlMwdU5USXdOV3d0T0M0Mk5Ua3lMUzR4TVRJellTNHhOVFU1TGpFMU5Ua2dNQ0F3SURFdExqRXpNek10TGpBM01UTmpMUzR3TWpnekxTNHdOREl0TGpBek5URXRMakE1T0RZdExqQXlNUzB1TVRVMU15NHdNamM0TFM0d09EUXVNVEV5TXkwdU1UUTROQzR5TURNMkxTNHhOVFl5YkRndU56TTFPUzB1TVRFeU0yTXhMakF6TlRFdExqQTBPRGtnTWk0eE5qQXhMUzQ0T0RZNElESXVOVFV6TnkweExqa3hNelpzTGpRNU9TMHhMak13TVROakxqQXlNVFV0TGpBMU5qRXVNREk1TXkwdU1URXlPQzR3TVRRM0xTNHhOamd0TGpVMk1qVXRNaTQxTkRZekxUSXVPRE0xTFRRdU5EUTFNeTAxTGpVME9Ua3ROQzQwTkRVekxUSXVOVEF6T1NBd0xUUXVOakk0TkNBeExqWXhOemN0TlM0ek9EYzJJRE11T0RZeE5DMHVORGt5TnkwdU16WTFPQzB4TGpFeE9EY3RMalUyTWpVdE1TNDNPVFF0TGpRNU9TMHhMakl3TWpZdU1URTVMVEl1TVRZMk5TQXhMakE0TXkweUxqSTROakVnTWk0eU9EVTJMUzR3TWpnekxqTXhMUzR3TURZNUxqWXhNamd1TURZek5TNDRPVFJETVM0MU5qZ3pJREV6TGpFM01TQXdJREUwTGpjM05UUWdNQ0F4Tmk0M05USmpNQ0F1TVRjME9DNHdNVFF5TGpNMU1UVXVNRE0xTWk0MU1qY3pMakF4TkRFdU1EZ3pMakE0TkRRdU1UUTNOUzR4TmpnNUxqRTBOelZvTVRVdU9UZ3hOR011TURrd09TQXdJQzR4TnpVNExTNHdOalExTGpJd016SXRMakUxTlROc0xqRXlMUzQwTWpZNGVtMHlMamMxTmpndE5TNDFOak0wWXkwdU1EYzNNU0F3TFM0eE5qRXhJREF0TGpJek9ETXVNREV4TWkwdU1EVTJOaUF3TFM0eE1EVTBMakEwTVRVdExqRXlOeTR3T1RjMmJDMHVNek0zT0NBeExqRTNORFJqTFM0eE5EYzFMalV3TmpndExqQTVNVGd1T1Rjd055NHhOVFF6SURFdU16RTJOQzR5TWpVMkxqTXhOalF1TmpBMU5TNDBPVGdnTVM0d05qSTFMalV4T1RWc01TNDRORE0zTGpFeE16TmpMakExTlRjZ01DQXVNVEExTlM0d01qWXpMakV6TWprdU1EY3dNeTR3TWpnekxqQTBNeTR3TXpVeExqRXdOelF1TURJeE5DNHhOVFl5TFM0d01qZ3pMakE0TkMwdU1URXpNaTR4TkRnMUxTNHlNRFF1TVRVMU0yd3RNUzQ1TWpFdU1URXlNMk10TVM0d05ERXVNRFE0T0MweUxqRTFPREl1T0RnMk55MHlMalUxTWpjZ01TNDVNVFJzTFM0eE5EQTJMak0xT0RWakxTNHdNamd6TGpBM01UTXVNREl4TlM0eE5ERTJMakE1T0RZdU1UUXhObWcyTGpVNU56ZGpMakEzTnpFZ01DQXVNVFEzTkMwdU1EUTRPUzR4TmprdExqRXlOaTR4TVRJeUxTNDBNRGd5TGpFM05UY3RMamd6Tnk0eE56VTNMVEV1TWpnd015QXdMVEl1TmpBeU5TMHlMakV5TlMwMExqY3lOeTAwTGpjek5EUXROQzQzTWpjaUx6NDhMM04yWno0PSIvPjx0ZXh0IGFyaWEtaGlkZGVuPSJ0cnVlIiB4PSIzNTUiIHk9IjE1MCIgZmlsbD0iIzAxMDEwMSIgZmlsbC1vcGFjaXR5PSIuMyIgdHJhbnNmb3JtPSJzY2FsZSguMSkiIHRleHRMZW5ndGg9IjI1MCI+Q0ROPC90ZXh0Pjx0ZXh0IHg9IjM1NSIgeT0iMTQwIiB0cmFuc2Zvcm09InNjYWxlKC4xKSIgZmlsbD0iI2ZmZiIgdGV4dExlbmd0aD0iMjUwIj5DRE48L3RleHQ+PHRleHQgYXJpYS1oaWRkZW49InRydWUiIHg9Ijk4NSIgeT0iMTUwIiBmaWxsPSIjY2NjIiBmaWxsLW9wYWNpdHk9Ii4zIiB0cmFuc2Zvcm09InNjYWxlKC4xKSIgdGV4dExlbmd0aD0iODUwIj5DbG91ZGZsYXJlIENETjwvdGV4dD48dGV4dCB4PSI5ODUiIHk9IjE0MCIgdHJhbnNmb3JtPSJzY2FsZSguMSkiIGZpbGw9IiMzMzMiIHRleHRMZW5ndGg9Ijg1MCI+Q2xvdWRmbGFyZSBDRE48L3RleHQ+PC9nPjwvc3ZnPg=="
-            />
-          </a>
-          <a href="https://vuejs.org" target="_blank">
-            <img
-              src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB3aWR0aD0iODMiIGhlaWdodD0iMjAiIHJvbGU9ImltZyIgYXJpYS1sYWJlbD0iV2ViOiBWdWUiPjx0aXRsZT5XZWI6IFZ1ZTwvdGl0bGU+PGxpbmVhckdyYWRpZW50IGlkPSJzIiB4Mj0iMCIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2JiYiIgc3RvcC1vcGFjaXR5PSIuMSIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1vcGFjaXR5PSIuMSIvPjwvbGluZWFyR3JhZGllbnQ+PGNsaXBQYXRoIGlkPSJyIj48cmVjdCB3aWR0aD0iODMiIGhlaWdodD0iMjAiIHJ4PSIzIiBmaWxsPSIjZmZmIi8+PC9jbGlwUGF0aD48ZyBjbGlwLXBhdGg9InVybCgjcikiPjxyZWN0IHdpZHRoPSI1MiIgaGVpZ2h0PSIyMCIgZmlsbD0iI2ZmZiIvPjxyZWN0IHg9IjUyIiB3aWR0aD0iMzEiIGhlaWdodD0iMjAiIGZpbGw9IiM0ZmMwOGQiLz48cmVjdCB3aWR0aD0iODMiIGhlaWdodD0iMjAiIGZpbGw9InVybCgjcykiLz48L2c+PGcgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IlZlcmRhbmEsR2VuZXZhLERlamFWdSBTYW5zLHNhbnMtc2VyaWYiIHRleHQtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iIGZvbnQtc2l6ZT0iMTEwIj48aW1hZ2UgeD0iNSIgeT0iMyIgd2lkdGg9IjE0IiBoZWlnaHQ9IjE0IiB4bGluazpocmVmPSJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUJtYVd4c1BTSWpORVpETURoRUlpQnliMnhsUFNKcGJXY2lJSFpwWlhkQ2IzZzlJakFnTUNBeU5DQXlOQ0lnZUcxc2JuTTlJbWgwZEhBNkx5OTNkM2N1ZHpNdWIzSm5Mekl3TURBdmMzWm5JajQ4ZEdsMGJHVStWblZsTG1welBDOTBhWFJzWlQ0OGNHRjBhQ0JrUFNKTk1qUXNNUzQyTVVneE5DNHdOa3d4TWl3MUxqRTJMRGt1T1RRc01TNDJNVWd3VERFeUxESXlMak01V2sweE1pd3hOQzR3T0N3MUxqRTJMREl1TWpOSU9TNDFPVXd4TWl3MkxqUXhiREl1TkRFdE5DNHhPR2cwTGpReldpSXZQand2YzNablBnPT0iLz48dGV4dCBhcmlhLWhpZGRlbj0idHJ1ZSIgeD0iMzU1IiB5PSIxNTAiIGZpbGw9IiNjY2MiIGZpbGwtb3BhY2l0eT0iLjMiIHRyYW5zZm9ybT0ic2NhbGUoLjEpIiB0ZXh0TGVuZ3RoPSIyNTAiPldlYjwvdGV4dD48dGV4dCB4PSIzNTUiIHk9IjE0MCIgdHJhbnNmb3JtPSJzY2FsZSguMSkiIGZpbGw9IiMzMzMiIHRleHRMZW5ndGg9IjI1MCI+V2ViPC90ZXh0Pjx0ZXh0IGFyaWEtaGlkZGVuPSJ0cnVlIiB4PSI2NjUiIHk9IjE1MCIgZmlsbD0iIzAxMDEwMSIgZmlsbC1vcGFjaXR5PSIuMyIgdHJhbnNmb3JtPSJzY2FsZSguMSkiIHRleHRMZW5ndGg9IjIxMCI+VnVlPC90ZXh0Pjx0ZXh0IHg9IjY2NSIgeT0iMTQwIiB0cmFuc2Zvcm09InNjYWxlKC4xKSIgZmlsbD0iI2ZmZiIgdGV4dExlbmd0aD0iMjEwIj5WdWU8L3RleHQ+PC9nPjwvc3ZnPg=="
-            />
-          </a>
-        </p>
-      </section>
-      <section class="flex flex-col items-center gap-2">
-        <div class="flex gap-6">
-          <a title="打赏站长" target="_blank" href="/reward.webp">
-            <img class="w-8" src="@/assets/images/footer/shang.svg" />
-          </a>
-          <a title="Github" target="_blank" rel="nofollow" href="https://github.com/uxiaohan">
-            <img class="w-8" src="@/assets/images/footer/github.svg" />
-          </a>
-          <a title="Sᴜᴘᴇʀᴍᴀ'∫Bʟᴏɢ | superma的博客" target="_blank" href="https://190223.xyz/">
-            <img class="w-8" src="@/assets/images/footer/blog.svg" />
-          </a>
-        </div>
-        <span class="w-full font-bold text-lg text-center">镜云</span>
-      </section>
-    </main>
+  <footer class="w-full max-w-[1229px] mt-8 pb-4">
+    <div class="border-t border-teal-200/60 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="flex flex-col items-center md:items-start gap-1">
+        <span class="text-base font-medium">镜云图床 CloudLens</span>
+        <span class="text-sm text-muted-foreground">支持图片和视频托管，全球CDN加速</span>
+      </div>
+      <div class="flex items-center gap-5">
+        <a href="https://github.com/luyao88/cloud_lens" target="_blank" title="GitHub" class="opacity-60 hover:opacity-100 transition">
+          <img class="w-6" src="@/assets/images/footer/github.svg" />
+        </a>
+        <a href="https://190223.xyz" target="_blank" title="Blog" class="opacity-60 hover:opacity-100 transition">
+          <img class="w-6" src="@/assets/images/footer/blog.svg" />
+        </a>
+        <a href="/reward.jpg" target="_blank" title="打赏" class="opacity-60 hover:opacity-100 transition">
+          <img class="w-6" src="@/assets/images/footer/shang.svg" />
+        </a>
+      </div>
+    </div>
   </footer>
 </template>

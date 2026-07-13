@@ -1,5 +1,5 @@
 <template>
-  <Header title="镜云" desc="拒绝流量劫持，全面使用HTTPS" />
+  <Header title="镜云图床 CloudLens" desc="免费无限图床" />
   <main><RouterView /></main>
   <Footer />
   <Toaster />
