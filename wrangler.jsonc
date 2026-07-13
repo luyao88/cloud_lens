@@ -1,5 +1,5 @@
 {
-  "name": "cloud-lens-main",
+  "name": "cloudlens",
   "compatibility_date": "2025-04-09",
   "assets": {
     "directory": "./dist"
