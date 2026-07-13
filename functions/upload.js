@@ -8,7 +8,7 @@ export async function onRequest({ request }) {
   return fetch(`https://api.imgur.com/3/upload?client_id=d70305e7c3ac5c6`, {
     method,
     headers: {
-      ...request.headers,
+      Authorization: 'Client-ID d70305e7c3ac5c6',
     },
     body,
   });
