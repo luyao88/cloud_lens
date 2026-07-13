@@ -16,11 +16,24 @@
     background: #ffffff;
     overflow: hidden;
 
-    & > .thumb {
+    & > .thumb-wrapper {
       flex-shrink: 0;
       width: 3.5rem;
       height: 3.5rem;
-      object-fit: cover;
+      cursor: pointer;
+      border-radius: 0.375rem;
+      overflow: hidden;
+
+      & > .thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.2s;
+      }
+
+      &:hover > .thumb {
+        transform: scale(1.08);
+      }
     }
 
     & > .value {
@@ -38,9 +51,9 @@
 
         & > p {
           & > input {
-            background: linear-gradient(90deg, #e5e6eb 0%, #f1f2f4 10%, #e5e6eb 26%); /* 产生渐变效果 */
+            background: linear-gradient(90deg, #e5e6eb 0%, #f1f2f4 10%, #e5e6eb 26%);
             background-size: 200% 100%;
-            animation: vhFilterAnimation 2.5s infinite linear; /* 动画效果 */
+            animation: vhFilterAnimation 2.5s infinite linear;
           }
         }
       }
@@ -95,6 +108,55 @@
   }
 }
 
+// 预览放大弹窗
+.preview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+
+  .preview-content {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+
+    .preview-media {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 0.5rem;
+    }
+
+    .preview-close {
+      position: absolute;
+      top: -2.5rem;
+      right: 0;
+      width: 2rem;
+      height: 2rem;
+      border: none;
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 1.5rem;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.4);
+      }
+    }
+  }
+}
+
 @media screen and (max-width: 640px) {
   .ResList {
     display: flex;
@@ -116,9 +178,9 @@
 /* 动画关键帧，控制渐变的移动 */
 @keyframes vhFilterAnimation {
   0% {
-    background-position: 200% 0; /* 起始位置，渐变开始在左侧 */
+    background-position: 200% 0;
   }
   100% {
-    background-position: -200% 0; /* 结束位置，渐变移动到右侧 */
+    background-position: -200% 0;
   }
 }

@@ -1,7 +1,12 @@
 <template>
   <section class="ResList">
     <div class="item" v-for="(i, idx) in props.modelValue" :key="idx">
-      <img v-if="i.upload_blob" class="thumb" :src="i.upload_result ? i.upload_blob : LoadingImg" />
+      <!-- 缩略图：图片或视频 -->
+      <div class="thumb-wrapper" @click="i.upload_blob && openPreview(i)">
+        <img v-if="i.upload_type === 'image' || (!i.upload_type && i.upload_blob)" class="thumb" :src="i.upload_result ? i.upload_blob : LoadingImg" />
+        <video v-else-if="i.upload_type === 'video'" class="thumb" :src="i.upload_blob" muted></video>
+        <img v-else class="thumb" :src="LoadingImg" />
+      </div>
       <div class="value" :class="{ active: !i.upload_result }">
         <p><input :value="i.upload_result ? formatURL(props, i.upload_result) : ''" type="text" readonly @click="i.upload_result && copyCodeValue(formatURL(props, i.upload_result))" /> <span>URL</span></p>
         <p><input :value="i.upload_result ? formatURL(props, i.upload_result, 'md') : ''" type="text" readonly @click="i.upload_result && copyCodeValue(formatURL(props, i.upload_result, 'md'))" /> <span>Markdown</span></p>
@@ -13,9 +18,19 @@
         <HoverCardContent class="w-max h-max"><QrcodeVue class="qrcode scale" :value="formatURL(props, i.upload_result)" :size="666" level="H" /></HoverCardContent>
       </HoverCard>
     </div>
+
+    <!-- 预览放大弹窗 -->
+    <div v-if="previewVisible" class="preview-overlay" @click="closePreview">
+      <div class="preview-content" @click.stop>
+        <img v-if="previewItem?.upload_type === 'image' || (!previewItem?.upload_type && previewItem?.upload_blob)" :src="previewItem?.upload_blob" class="preview-media" />
+        <video v-else-if="previewItem?.upload_type === 'video'" :src="previewItem?.upload_blob" controls autoplay class="preview-media"></video>
+        <button class="preview-close" @click="closePreview">&times;</button>
+      </div>
+    </div>
   </section>
 </template>
 <script setup lang="ts">
+import { ref } from 'vue';
 import QrcodeVue from 'qrcode.vue';
 import { formatURL } from '@/utils/index';
 import { useToast } from '@/components/ui/toast/use-toast';
@@ -23,6 +38,18 @@ const { toast } = useToast();
 import LoadingImg from '@/assets/images/loading.gif';
 const props = defineProps(['modelValue', 'nodeHost']);
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+
+// 预览放大
+const previewVisible = ref(false);
+const previewItem = ref<any>(null);
+const openPreview = (item: any) => {
+  previewItem.value = item;
+  previewVisible.value = true;
+};
+const closePreview = () => {
+  previewVisible.value = false;
+  previewItem.value = null;
+};
 
 // 复制CODE
 const copyCodeValue = async (v: string) => {

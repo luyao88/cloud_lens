@@ -83,12 +83,15 @@ const fileUpload = async (FileListArr: Array<any>) => {
     if (i.upload_status) return;
     const formData = new FormData();
     formData.append('file', i);
-    // 做图片预览blob======
+    // 做预览blob======
     if (i.type.startsWith('image/')) {
-      const blob = URL.createObjectURL(i);
-      i.upload_blob = blob;
+      i.upload_blob = URL.createObjectURL(i);
+      i.upload_type = 'image';
+    } else if (i.type.startsWith('video/')) {
+      i.upload_blob = URL.createObjectURL(i);
+      i.upload_type = 'video';
     }
-    // 做图片预览blob======
+    // 做预览blob======
     // 同步上传状态======
     i.upload_status = 'uploading';
     i.upload_progress = 96;
