@@ -1,5 +1,5 @@
 <template>
-  <section class="Upload">
+  <section class="Upload" :class="{ sticky: hasSuccessUpload }">
     <input type="file" multiple @change="fileListChange" :accept="UploadConfig.AcceptTypes" />
     <div class="placeholder">
       <div class="upload-icon-wrap">
@@ -17,13 +17,15 @@
   </section>
 </template>
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useToast } from '@/components/ui/toast/use-toast';
 const { toast } = useToast();
 // 参数
 const props = defineProps(['modelValue', 'UploadConfig', 'uploadAPI']);
 const emits = defineEmits(['update:modelValue']);
 const UploadConfig = ref<any>(props.UploadConfig);
+// 是否有文件上传成功（用于悬浮置顶）
+const hasSuccessUpload = computed(() => props.modelValue?.some((f: any) => f.upload_status === 'success'));
 // 文件上传列表变化事件
 const fileListChange = async (v: Event, type: boolean = false) => {
   let targetFileListArr: any = [];

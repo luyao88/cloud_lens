@@ -8,13 +8,22 @@
   width: 100%;
   height: 12rem;
   border-radius: 1.5rem;
-  border: 2px dashed #5eead4;
+  border: 2px dashed #57575741;
   background: rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(12px);
   overflow: hidden;
   z-index: 1;
   cursor: pointer;
   transition: all 0.3s ease;
+
+  // 悬浮置顶：上传成功后滚动时固定在页面顶部
+  &.sticky {
+    position: sticky;
+    top: 4.5rem;
+    z-index: 49;
+    border-radius: 0 0 1.5rem 1.5rem;
+    box-shadow: 0 4px 20px rgba(3, 182, 170, 0.15);
+  }
 
   &:hover {
     border-color: #03b6aa4f;
