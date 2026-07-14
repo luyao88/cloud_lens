@@ -18,15 +18,14 @@
         </HoverCardTrigger>
         <HoverCardContent class="w-max h-max"><QrcodeVue class="qrcode scale" :value="formatURL(props, i.upload_result)" :size="666" level="H" /></HoverCardContent>
       </HoverCard>
-    </div>
-
-    <!-- 预览放大弹窗 -->
-    <div v-if="previewVisible" class="preview-overlay" @click="closePreview">
-      <div class="preview-content" @click.stop>
-        <img v-if="previewItem?.upload_type === 'image' || (!previewItem?.upload_type && previewItem?.upload_blob)" :src="previewItem?.upload_blob" class="preview-media" />
-        <video v-else-if="previewItem?.upload_type === 'video'" :src="previewItem?.upload_blob" controls autoplay class="preview-media"></video>
-        <button class="preview-close" @click="closePreview">&times;</button>
-      </div>
+      <!-- 删除按钮 -->
+      <button class="btn-delete" @click="deleteItem(idx)" title="删除">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <line x1="10" y1="11" x2="10" y2="17" />
+          <line x1="14" y1="11" x2="14" y2="17" />
+        </svg>
+      </button>
     </div>
   </section>
 </template>
@@ -38,18 +37,45 @@ import { useToast } from '@/components/ui/toast/use-toast';
 const { toast } = useToast();
 import LoadingImg from '@/assets/images/loading.gif';
 const props = defineProps(['modelValue', 'nodeHost']);
+const emits = defineEmits(['update:modelValue']);
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 
-// 预览放大
-const previewVisible = ref(false);
-const previewItem = ref<any>(null);
-const openPreview = (item: any) => {
-  previewItem.value = item;
-  previewVisible.value = true;
+// ViewImage 图片+视频预览
+declare const ViewImage: any;
+const loadViewImage = () => {
+  return new Promise<void>((resolve) => {
+    if ((window as any).ViewImage) return resolve();
+    const s = document.createElement('script');
+    s.src = '/view-image.min.js';
+    s.onload = () => resolve();
+    document.head.appendChild(s);
+  });
 };
-const closePreview = () => {
-  previewVisible.value = false;
-  previewItem.value = null;
+
+// 直接调用 ViewImage 预览，跳过其 click 监听器的 DOM 查找
+const openPreview = async (clickedItem: any) => {
+  await loadViewImage();
+  // 收集所有可预览的文件
+  const items = (props.modelValue || []).filter((i: any) => i.upload_blob && i.upload_result);
+  if (items.length === 0) return;
+  const urls = items.map((i: any) => i.upload_blob);
+  const clickedUrl = clickedItem.upload_blob;
+  // 构造 mock items，让 ViewImage 能通过 tagName 判断视频
+  const mockItems = items.map((i: any) => ({
+    tagName: i.upload_type === 'video' ? 'VIDEO' : 'IMG',
+    src: i.upload_blob,
+    href: i.upload_blob,
+  }));
+  const isCurrentVideo = clickedItem.upload_type === 'video';
+  ViewImage.displayWithVideo(urls, clickedUrl, mockItems, isCurrentVideo);
+};
+
+// 删除单个文件
+const deleteItem = (idx: number) => {
+  const newList = [...props.modelValue];
+  newList.splice(idx, 1);
+  emits('update:modelValue', newList);
+  toast({ title: 'Tips', description: '已删除该文件记录' });
 };
 
 // 复制CODE
