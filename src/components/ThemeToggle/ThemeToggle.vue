@@ -53,10 +53,10 @@ onUnmounted(() => {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 50%;
-  background: rgba(127, 127, 127, 0.15);
+  background: rgba(115, 189, 183, 0.384);
   border: none;
   cursor: pointer;
-  color: #1a2e2c;
+  color: #111111;
   transition:
     background-color 0.3s ease,
     transform 0.3s ease,

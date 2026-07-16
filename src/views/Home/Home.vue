@@ -53,8 +53,8 @@
     <!-- 文件列表 -->
     <ResList v-model="fileList" :nodeHost="nodeHost" />
 
-    <!-- 特性区域（无文件时显示） -->
-    <div v-show="!fileList.length" class="features">
+    <!-- 特性区域 -->
+    <div class="features">
       <div class="feature-card">
         <div class="feature-icon" style="background: linear-gradient(135deg, #03b6aa, #0d9488)">
           <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
