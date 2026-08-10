@@ -1,6 +1,7 @@
 {
 	"name": "cloudlens",
 	"compatibility_date": "2025-04-09",
+	"pages_build_output_dir": "./dist",
 	"assets": {
 		"directory": "./dist"
 	},
@@ -14,6 +15,6 @@
 	],
 	"vars": {
 		"GITHUB_CLIENT_ID": "Ov23lixb4bVfNFJtQI6M",
-		"OAUTH_REDIRECT_ORIGIN": "http://localhost:8788"
+		"OAUTH_REDIRECT_ORIGIN": "https://cloudlens.190223.xyz"
 	}
 }
