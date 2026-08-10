@@ -1,7 +1,19 @@
 {
-  "name": "cloudlens",
-  "compatibility_date": "2025-04-09",
-  "assets": {
-    "directory": "./dist"
-  }
+	"name": "cloudlens",
+	"compatibility_date": "2025-04-09",
+	"assets": {
+		"directory": "./dist"
+	},
+	"d1_databases": [
+		{
+			"binding": "cloud_lens_data",
+			"database_name": "cloud_lens_data",
+			"database_id": "dd08fa9f-e208-40ae-81bd-81813766be71",
+			"remote": true
+		}
+	],
+	"vars": {
+		"GITHUB_CLIENT_ID": "Ov23lixb4bVfNFJtQI6M",
+		"OAUTH_REDIRECT_ORIGIN": "http://localhost:8788"
+	}
 }

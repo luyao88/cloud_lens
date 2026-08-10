@@ -12,6 +12,11 @@ const router = createRouter({
       name: 'Legal',
       component: () => import('@/views/Legal/Legal.vue'),
     },
+    {
+      path: '/video-to-image',
+      name: 'VideoToImage',
+      component: () => import('@/views/VideoToImage/VideoToImage.vue'),
+    },
   ],
 })
 
