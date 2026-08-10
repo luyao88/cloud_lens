@@ -30,3 +30,4 @@ coverage
 
 # Cloudflare local secrets
 .dev.vars
+.wrangler/
