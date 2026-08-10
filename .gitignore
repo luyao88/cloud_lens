@@ -31,3 +31,4 @@ coverage
 # Cloudflare local secrets
 .dev.vars
 .wrangler/
+.wrangler/state/v3/observability/miniflare-wobs-trace-store/a590acd76969f996ec6e4b599c3c09f58c283a76f2d61392b5d3046caf557602.sqlite-wal

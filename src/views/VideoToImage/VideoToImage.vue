@@ -28,14 +28,7 @@
 
     <!-- 视频预览 -->
     <div v-if="videoUrl" class="video-preview">
-      <video
-        :ref="(el: any) => (videoElement = el)"
-        :src="videoUrl"
-        controls
-        crossorigin="anonymous"
-        @loadedmetadata="handleLoadedMetadata"
-        @timeupdate="handleTimeUpdate"
-      ></video>
+      <video :ref="setVideoRef" :src="videoUrl" controls crossorigin="anonymous" @loadedmetadata="handleLoadedMetadata" @timeupdate="handleTimeUpdate"></video>
     </div>
 
     <!-- 时间轴 -->
@@ -80,7 +73,9 @@
     <div v-if="videoUrl" class="settings-panel">
       <div class="settings-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+          />
           <circle cx="12" cy="12" r="3" />
         </svg>
         输出设置
@@ -230,6 +225,13 @@ const results = ref<Array<{ url: string; type: string; size: string; name: strin
 let videoElement: HTMLVideoElement | null = null;
 let gifInstance: any = null;
 
+// 视频元素 ref 绑定
+const setVideoRef = (el: Element | { $el?: Element } | null) => {
+  if (el && el instanceof HTMLVideoElement) {
+    videoElement = el;
+  }
+};
+
 // 加载视频
 const handleFileChange = (e: Event) => {
   const target = e.target as HTMLInputElement;
@@ -283,18 +285,22 @@ const captureFrame = () => {
 
   const mimeType = format.value === 'webp' ? 'image/webp' : 'image/jpeg';
   const ext = format.value === 'webp' ? 'webp' : 'jpg';
-  canvas.toBlob((blob) => {
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const size = (blob.size / 1024).toFixed(1) + 'KB';
-    results.value.unshift({
-      url,
-      type: ext.toUpperCase(),
-      size,
-      name: `frame_${Date.now()}.${ext}`,
-    });
-    toast({ title: 'Success', description: `Captured ${ext.toUpperCase()} frame` });
-  }, mimeType, quality.value);
+  canvas.toBlob(
+    (blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const size = (blob.size / 1024).toFixed(1) + 'KB';
+      results.value.unshift({
+        url,
+        type: ext.toUpperCase(),
+        size,
+        name: `frame_${Date.now()}.${ext}`,
+      });
+      toast({ title: 'Success', description: `Captured ${ext.toUpperCase()} frame` });
+    },
+    mimeType,
+    quality.value,
+  );
 };
 
 // 生成GIF
@@ -346,7 +352,7 @@ const generateGIF = () => {
 
     const processFrames = async () => {
       for (let i = 0; i < totalFrames; i++) {
-        const time = startTime.value + (i / fps.value);
+        const time = startTime.value + i / fps.value;
         if (time >= videoElement!.duration) break;
         await captureFrame(time);
         frameCount++;
