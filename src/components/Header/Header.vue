@@ -9,15 +9,15 @@
       <div class="header-right">
         <span class="desc">{{ props.desc }}</span>
         <ThemeToggle />
-        <!-- 未登录：显示 GitHub 登录按钮 -->
-        <a v-if="!user" href="/api/auth/github" class="login-btn">
+        <!-- 未登录：显示登录按钮（点击弹出登录弹窗） -->
+        <button v-if="!user" class="login-btn" @click="authOpen = true">
           <svg class="login-icon" viewBox="0 0 24 24" fill="currentColor">
             <path
               d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"
             />
           </svg>
           <span>Login</span>
-        </a>
+        </button>
         <!-- 已登录：显示头像 + 下拉菜单 -->
         <div v-else class="user-menu" @click="showMenu = !showMenu" ref="menuRef">
           <img :src="user.avatar_url" :alt="user.username" class="user-avatar" />
@@ -42,20 +42,24 @@
         </a>
       </div>
     </div>
+    <!-- 登录弹窗 -->
+    <AuthDialog v-model:open="authOpen" @success="fetchUser" />
   </header>
 </template>
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import ThemeToggle from '@/components/ThemeToggle/ThemeToggle.vue';
+import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 
 const props = defineProps(['title', 'desc']);
 
 const user = ref<{ username: string; avatar_url: string; email: string } | null>(null);
 const showMenu = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
+const authOpen = ref(false);
 
 // 获取当前登录用户
-onMounted(async () => {
+const fetchUser = async () => {
   try {
     const res = await fetch('/api/auth/me');
     const data = await res.json();
@@ -63,6 +67,10 @@ onMounted(async () => {
       user.value = data.user;
     }
   } catch {}
+};
+
+onMounted(async () => {
+  await fetchUser();
 
   // 点击外部关闭下拉菜单
   document.addEventListener('click', closeMenu);
@@ -159,11 +167,13 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0.875rem;
+  border: none;
   border-radius: 0.5rem;
   background: #24292e;
   color: #fff;
   font-size: 0.8rem;
   font-weight: 500;
+  cursor: pointer;
   transition: background 0.2s;
 }
 

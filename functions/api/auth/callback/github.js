@@ -102,35 +102,50 @@ export async function onRequest({ request, env }) {
   }
 
   // 4. 查找或创建用户
-  let user = await env.cloud_lens_data
-    .prepare('SELECT * FROM users WHERE provider = ? AND provider_id = ?')
-    .bind('github', String(githubUser.id))
-    .first();
+  let user;
+  try {
+    user = await env.cloud_lens_data
+      .prepare('SELECT * FROM users WHERE provider = ? AND provider_id = ?')
+      .bind('github', String(githubUser.id))
+      .first();
 
-  if (!user) {
-    const result = await env.cloud_lens_data
-      .prepare(
-        `INSERT INTO users (provider, provider_id, email, username, avatar_url)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .bind('github', String(githubUser.id), email, githubUser.login, githubUser.avatar_url)
-      .run();
+    if (!user) {
+      const result = await env.cloud_lens_data
+        .prepare(
+          `INSERT INTO users (provider, provider_id, email, username, avatar_url)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .bind('github', String(githubUser.id), email, githubUser.login, githubUser.avatar_url)
+        .run();
 
-    user = {
-      id: result.meta.last_row_id,
-      username: githubUser.login,
-      avatar_url: githubUser.avatar_url,
-    };
+      user = {
+        id: result.meta.last_row_id,
+        username: githubUser.login,
+        avatar_url: githubUser.avatar_url,
+      };
+    }
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: 'Database error (users)', message: err.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } },
+    );
   }
 
   // 5. 创建 session
   const sessionId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-  await env.cloud_lens_data
-    .prepare(`INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)`)
-    .bind(sessionId, user.id, expiresAt.toISOString())
-    .run();
+  try {
+    await env.cloud_lens_data
+      .prepare(`INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)`)
+      .bind(sessionId, user.id, expiresAt.toISOString())
+      .run();
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: 'Database error (sessions)', message: err.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
 
   // 6. 设置 Cookie 并跳转回首页
   const isHttps = url.protocol === 'https:';
@@ -139,7 +154,21 @@ export async function onRequest({ request, env }) {
   const headers = new Headers();
   headers.append('Set-Cookie', `oauth_state=; Path=/; SameSite=Lax; Max-Age=0${secureFlag}`);
   headers.append('Set-Cookie', `session=${sessionId}; Path=/; SameSite=Lax; Max-Age=2592000${secureFlag}`);
-  headers.set('Location', '/');
 
+  // popup 模式：返回 HTML，用 postMessage 通知父窗口后关闭弹窗
+  const isPopup = url.searchParams.get('popup') === '1';
+  if (isPopup) {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>登录中...</title></head><body>
+<p>登录成功，正在关闭...</p>
+<script>
+  window.opener.postMessage({ type: 'auth-success' }, '*');
+  setTimeout(() => window.close(), 100);
+<\/script>
+</body></html>`;
+    return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  }
+
+  // 普通模式：302 跳转回首页
+  headers.set('Location', '/');
   return new Response(null, { status: 302, headers });
 }
