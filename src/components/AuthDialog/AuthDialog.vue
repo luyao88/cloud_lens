@@ -96,7 +96,8 @@ function loginWithOAuth(provider: 'github' | 'google') {
     if (e.data?.type === 'auth-success') {
       window.removeEventListener('message', onMessage)
       emit('update:open', false)
-      emit('success')
+      // 直接刷新页面，确保 session cookie 生效
+      window.location.reload()
     } else if (e.data?.type === 'auth-error') {
       window.removeEventListener('message', onMessage)
       toast({ title: '登录失败', description: e.data?.message || '未知错误', variant: 'destructive' })

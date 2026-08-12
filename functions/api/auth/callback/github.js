@@ -158,6 +158,8 @@ export async function onRequest({ request, env }) {
   // popup 模式：返回 HTML，用 postMessage 通知父窗口后关闭弹窗
   const isPopup = url.searchParams.get('popup') === '1';
   if (isPopup) {
+    // 把 Set-Cookie header 加到 HTML 响应上，确保 session cookie 被设置
+    headers.set('Content-Type', 'text/html; charset=utf-8');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>登录中...</title></head><body>
 <p>登录成功，正在关闭...</p>
 <script>
@@ -165,7 +167,7 @@ export async function onRequest({ request, env }) {
   setTimeout(() => window.close(), 100);
 <\/script>
 </body></html>`;
-    return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    return new Response(html, { status: 200, headers });
   }
 
   // 普通模式：302 跳转回首页

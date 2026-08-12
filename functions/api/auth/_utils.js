@@ -5,10 +5,12 @@
 /**
  * popup 模式下返回的 HTML 页面
  * 通过 postMessage 通知父窗口登录结果，然后关闭弹窗
+ * @param {boolean} success - 是否成功
+ * @param {string} [message] - 错误信息
+ * @param {Headers} [headers] - 附加的 response headers（如 Set-Cookie）
  */
-export function popupResponse(success, message) {
+export function popupResponse(success, message, headers) {
   const data = success ? 'auth-success' : 'auth-error';
-  const msgAttr = message ? ` data-msg="${message.replace(/"/g, '&quot;')}"` : '';
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>登录中...</title></head><body>
 <p>${success ? '登录成功，正在关闭...' : '登录失败'}</p>
 <script>
@@ -16,9 +18,11 @@ export function popupResponse(success, message) {
   setTimeout(function(){ window.close(); }, 100);
 <\/script>
 </body></html>`;
+  const respHeaders = headers || new Headers();
+  respHeaders.set('Content-Type', 'text/html; charset=utf-8');
   return new Response(html, {
     status: 200,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: respHeaders,
   });
 }
 

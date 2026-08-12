@@ -125,7 +125,7 @@ export async function onRequest({ request, env }) {
 
   // 5. popup 模式返回 HTML，否则 302 跳转
   if (isPopup) {
-    return popupResponse(true);
+    return popupResponse(true, null, sessionHeaders);
   }
 
   sessionHeaders.set('Location', '/');
