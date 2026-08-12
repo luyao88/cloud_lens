@@ -82,28 +82,8 @@ watch(
 
 /** ============ OAuth 登录（GitHub / Google）============ */
 function loginWithOAuth(provider: 'github' | 'google') {
-  const popup = window.open(
-    `/api/auth/${provider}?popup=1`,
-    `${provider}-login`,
-    'width=600,height=700,menubar=no,toolbar=no',
-  )
-  if (!popup) {
-    toast({ title: '弹窗被拦截', description: '请允许弹窗后重试', variant: 'destructive' })
-    return
-  }
-
-  const onMessage = (e: MessageEvent) => {
-    if (e.data?.type === 'auth-success') {
-      window.removeEventListener('message', onMessage)
-      emit('update:open', false)
-      // 直接刷新页面，确保 session cookie 生效
-      window.location.reload()
-    } else if (e.data?.type === 'auth-error') {
-      window.removeEventListener('message', onMessage)
-      toast({ title: '登录失败', description: e.data?.message || '未知错误', variant: 'destructive' })
-    }
-  }
-  window.addEventListener('message', onMessage)
+  // 整页跳转到 OAuth 授权页，授权后回调 302 跳回首页
+  window.location.href = `/api/auth/${provider}`
 }
 
 /** ============ 邮箱注册流程 ============ */
