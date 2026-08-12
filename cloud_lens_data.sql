@@ -3,22 +3,22 @@
 -- ======================
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  
+
   -- 登录方式
   provider TEXT NOT NULL,               -- 'github' | 'google' | 'email'
-  provider_id TEXT,                     -- 第三方唯一ID
-  
+  provider_id TEXT,                     -- 第三方唯一ID（邮箱登录时为邮箱地址）
+
   -- 用户信息
   email TEXT,
   username TEXT,
   avatar_url TEXT,
-  
-  -- 邮箱密码登录用（可选）
+
+  -- 邮箱密码登录用（OAuth 用户可为空）
   password_hash TEXT,
-  
+
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  
+
   UNIQUE(provider, provider_id)
 );
 
