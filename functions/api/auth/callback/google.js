@@ -14,12 +14,17 @@ export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
-  const isPopup = url.searchParams.get('popup') === '1';
+
+  // 从 cookie 读取 popup 标记（redirect_uri 不能带 query 参数）
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const isPopup = cookieHeader
+    .split(';')
+    .map((c) => c.trim())
+    .some((c) => c.startsWith('oauth_popup=1'));
 
   if (!code) return new Response('Missing code', { status: 400 });
 
   // 验证 state 防 CSRF
-  const cookieHeader = request.headers.get('Cookie') || '';
   const cookieState = cookieHeader
     .split(';')
     .map((c) => c.trim())
@@ -34,7 +39,7 @@ export async function onRequest({ request, env }) {
 
   const requestUrl = new URL(request.url);
   const origin = env.OAUTH_REDIRECT_ORIGIN || requestUrl.origin;
-  const redirectUri = `${origin}/api/auth/callback/google${isPopup ? '?popup=1' : ''}`;
+  const redirectUri = `${origin}/api/auth/callback/google`;
 
   // 1. 用 code 换 access_token
   let tokenData;
