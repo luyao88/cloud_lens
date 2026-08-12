@@ -346,17 +346,19 @@ async function handleSubmit() {
         <p class="text-sm text-muted-foreground">
           已向 {{ email }} 发送 6 位验证码，请输入。
         </p>
-        <label class="auth-field">
+        <div class="auth-field">
           <span class="auth-label">验证码</span>
           <input
             v-model="code"
             type="text"
             maxlength="6"
+            autocomplete="one-time-code"
             class="auth-input tracking-[0.5em] text-center"
             placeholder="------"
+            @paste="$nextTick(() => {})"
             required
           />
-        </label>
+        </div>
 
         <button type="submit" class="auth-submit-btn" :disabled="submitting">
           {{ submitting ? '处理中...' : '验证并注册' }}

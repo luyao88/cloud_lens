@@ -252,36 +252,40 @@ const handleFileChange = (e: Event) => {
 
 // 视频元数据加载完成
 const handleLoadedMetadata = () => {
-  if (videoElement) {
-    videoDuration.value = videoElement.duration;
-    endTime.value = Math.min(videoElement.duration, 10); // 默认截取前10秒
+  const el = videoElement;
+  if (el) {
+    videoDuration.value = el.duration;
+    endTime.value = Math.min(el.duration, 10);
   }
 };
 
 // 当前时间更新（用于显示）
 const handleTimeUpdate = () => {
-  if (videoElement) currentTime.value = videoElement.currentTime;
+  const el = videoElement;
+  if (el) currentTime.value = el.currentTime;
 };
 
 // 跳转视频时间
 const seekTo = (e: Event) => {
   const target = e.target as HTMLInputElement;
   currentTime.value = parseFloat(target.value);
-  if (videoElement) videoElement.currentTime = currentTime.value;
+  const el = videoElement;
+  if (el) el.currentTime = currentTime.value;
 };
 
 // 截取当前帧（静态图片）
 const captureFrame = () => {
-  if (!videoElement) return;
+  const el = videoElement;
+  if (!el) return;
   const canvas = document.createElement('canvas');
-  const ratio = videoElement.videoHeight / videoElement.videoWidth;
-  const width = Math.min(videoElement.videoWidth, maxWidth.value);
+  const ratio = el.videoHeight / el.videoWidth;
+  const width = Math.min(el.videoWidth, maxWidth.value);
   const height = Math.round(width * ratio);
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  ctx.drawImage(videoElement, 0, 0, width, height);
+  ctx.drawImage(el, 0, 0, width, height);
 
   const mimeType = format.value === 'webp' ? 'image/webp' : 'image/jpeg';
   const ext = format.value === 'webp' ? 'webp' : 'jpg';
@@ -305,7 +309,8 @@ const captureFrame = () => {
 
 // 生成GIF
 const generateGIF = () => {
-  if (!videoElement) return;
+  const el = videoElement;
+  if (!el) return;
   if (endTime.value <= startTime.value) {
     toast({ title: 'Error', description: 'End time must be greater than start time' });
     return;
@@ -313,12 +318,11 @@ const generateGIF = () => {
   isGenerating.value = true;
   progress.value = 0;
 
-  // 动态导入 gif.js
   import('gif.js').then((module) => {
     const GIF = module.default;
     const canvas = document.createElement('canvas');
-    const ratio = videoElement!.videoHeight / videoElement!.videoWidth;
-    const width = Math.min(videoElement!.videoWidth, maxWidth.value);
+    const ratio = el.videoHeight / el.videoWidth;
+    const width = Math.min(el.videoWidth, maxWidth.value);
     const height = Math.round(width * ratio);
     canvas.width = width;
     canvas.height = height;
@@ -340,13 +344,13 @@ const generateGIF = () => {
     const captureFrame = (time: number) => {
       return new Promise<void>((resolve) => {
         const onSeeked = () => {
-          ctx!.drawImage(videoElement!, 0, 0, width, height);
+          ctx!.drawImage(el, 0, 0, width, height);
           gifInstance!.addFrame(ctx!, { copy: true, delay: 1000 / fps.value });
-          videoElement!.removeEventListener('seeked', onSeeked);
+          el.removeEventListener('seeked', onSeeked);
           resolve();
         };
-        videoElement!.addEventListener('seeked', onSeeked);
-        videoElement!.currentTime = Math.min(time, videoElement!.duration - 0.01);
+        el.addEventListener('seeked', onSeeked);
+        el.currentTime = Math.min(time, el.duration - 0.01);
       });
     };
 

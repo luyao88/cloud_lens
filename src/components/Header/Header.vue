@@ -20,10 +20,21 @@
         </button>
         <!-- 已登录：显示头像 + 下拉菜单 -->
         <div v-else class="user-menu" @click="showMenu = !showMenu" ref="menuRef">
-          <img :src="user.avatar_url" :alt="user.username" class="user-avatar" />
+          <img
+            v-if="user.avatar_url"
+            :src="user.avatar_url"
+            :alt="user.username"
+            class="user-avatar"
+          />
+          <div v-else class="user-avatar user-avatar-default">
+            {{ (user.username || '?')[0].toUpperCase() }}
+          </div>
           <div v-if="showMenu" class="dropdown-menu" @click.stop>
             <div class="dropdown-header">
-              <img :src="user.avatar_url" class="dropdown-avatar" />
+              <img v-if="user.avatar_url" :src="user.avatar_url" class="dropdown-avatar" />
+              <div v-else class="dropdown-avatar dropdown-avatar-default">
+                {{ (user.username || '?')[0].toUpperCase() }}
+              </div>
               <div>
                 <div class="dropdown-username">{{ user.username }}</div>
                 <div class="dropdown-email">{{ user.email || '' }}</div>
@@ -205,6 +216,18 @@ onUnmounted(() => {
   border-color: #03b6aa;
 }
 
+/* 邮箱注册用户无头像，显示首字母占位 */
+.user-avatar-default {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #03b6aa;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  user-select: none;
+}
+
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 0.5rem);
@@ -229,6 +252,17 @@ onUnmounted(() => {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 50%;
+}
+
+.dropdown-avatar-default {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #03b6aa;
+  color: #fff;
+  font-size: 1.125rem;
+  font-weight: 600;
+  user-select: none;
 }
 
 .dropdown-username {
