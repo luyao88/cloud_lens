@@ -232,7 +232,8 @@ onUnmounted(() => {
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  min-width: 12rem;
+  min-width: 16rem;
+  max-width: 20rem;
   background: var(--bg-card);
   border: 1px solid var(--border-base);
   border-radius: 0.5rem;
@@ -269,11 +270,19 @@ onUnmounted(() => {
   font-weight: 600;
   font-size: 0.875rem;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 11rem;
 }
 
 .dropdown-email {
   font-size: 0.75rem;
   color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 11rem;
 }
 
 .dropdown-menu hr {
