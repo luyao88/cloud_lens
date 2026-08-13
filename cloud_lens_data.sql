@@ -32,15 +32,22 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE TABLE IF NOT EXISTS images (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
+  imgur_id TEXT,                          -- Imgur 图片ID（如 abc123）
   imgur_url TEXT NOT NULL,
   delete_hash TEXT,                     -- Imgur 删除用
   filename TEXT,
   size INTEGER,
+  tags TEXT,                            -- 标签（逗号分隔，可空）
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_images_user_id ON images(user_id);
+CREATE INDEX IF NOT EXISTS idx_images_imgur_id ON images(imgur_id);
+
+-- 已有数据库升级用（新库无需执行，CREATE TABLE IF NOT EXISTS 已包含新列）：
+-- ALTER TABLE images ADD COLUMN imgur_id TEXT;
+-- ALTER TABLE images ADD COLUMN tags TEXT;
 
 
 -- ======================

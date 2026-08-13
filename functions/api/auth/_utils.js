@@ -50,6 +50,41 @@ export async function createSession(env, userId, url, remember = true) {
 }
 
 /**
+ * 从请求中解析当前登录用户
+ * 解析 session cookie -> 查询 sessions -> 查询 users
+ * @returns {Promise<{ user: object|null, session: object|null }>}
+ */
+export async function getUserFromRequest(request, env) {
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const sessionCookie = cookieHeader
+    .split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith('session='));
+
+  if (!sessionCookie) {
+    return { user: null, session: null };
+  }
+
+  const sessionId = sessionCookie.split('=')[1];
+
+  const session = await env.cloud_lens_data
+    .prepare(`SELECT * FROM sessions WHERE id = ? AND expires_at > datetime('now')`)
+    .bind(sessionId)
+    .first();
+
+  if (!session) {
+    return { user: null, session: null };
+  }
+
+  const user = await env.cloud_lens_data
+    .prepare('SELECT id, username, avatar_url, email FROM users WHERE id = ?')
+    .bind(session.user_id)
+    .first();
+
+  return { user: user || null, session };
+}
+
+/**
  * 查找或创建用户（第三方登录通用）
  */
 export async function findOrCreateUser(env, provider, providerId, email, username, avatarUrl) {
