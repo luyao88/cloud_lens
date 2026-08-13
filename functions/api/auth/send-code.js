@@ -2,13 +2,12 @@
  * /api/auth/send-code
  *
  * 发送邮箱验证码
- * POST body: { email, purpose: 'register' | 'login' }
+ * POST body: { email, purpose: 'register' | 'login' | 'reset' }
  *
  * 需要环境变量：
  * - RESEND_API_KEY: Resend 邮件服务 API Key
  * - MAIL_FROM: 发件地址（如 onboarding@resend.dev 或你的域名邮箱）
  */
-import { createSession } from './_utils.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -27,7 +26,7 @@ export async function onRequest({ request, env }) {
     return Response.json({ success: false, error: '邮箱格式不正确' }, { status: 400 });
   }
 
-  if (!['register', 'login'].includes(purpose)) {
+  if (!['register', 'login', 'reset'].includes(purpose)) {
     return Response.json({ success: false, error: '无效的 purpose' }, { status: 400 });
   }
 
@@ -42,8 +41,8 @@ export async function onRequest({ request, env }) {
     }
   }
 
-  // 登录前检查：邮箱是否已注册
-  if (purpose === 'login') {
+  // 登录/重置密码前检查：邮箱是否已注册
+  if (purpose === 'login' || purpose === 'reset') {
     const existing = await env.cloud_lens_data
       .prepare('SELECT id FROM users WHERE provider = ? AND provider_id = ?')
       .bind('email', email)

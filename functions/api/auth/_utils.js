@@ -28,9 +28,10 @@ export function popupResponse(success, message, headers) {
 
 /**
  * 生成 session 并设置 cookie
+ * @param {boolean} remember - true: 30 天持久 cookie；false: 会话级 cookie（关闭浏览器即失效）
  * 返回 { sessionId, headers }
  */
-export async function createSession(env, userId, url) {
+export async function createSession(env, userId, url, remember = true) {
   const sessionId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   const isHttps = url.protocol === 'https:';
@@ -41,8 +42,10 @@ export async function createSession(env, userId, url) {
     .bind(sessionId, userId, expiresAt.toISOString())
     .run();
 
+  // remember=true 设置 Max-Age=30天（持久化）；remember=false 不设 Max-Age（会话级 cookie）
+  const maxAge = remember ? `; Max-Age=2592000` : '';
   const headers = new Headers();
-  headers.append('Set-Cookie', `session=${sessionId}; Path=/; SameSite=Lax; Max-Age=2592000${secureFlag}`);
+  headers.append('Set-Cookie', `session=${sessionId}; Path=/; SameSite=Lax${maxAge}${secureFlag}`);
   return { sessionId, headers };
 }
 

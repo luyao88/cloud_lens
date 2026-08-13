@@ -2,9 +2,10 @@
  * /api/auth/login
  *
  * 邮箱密码登录
- * POST body: { email, password }
+ * POST body: { email, password, remember }
  *
  * 登录成功后创建 session 并返回 cookie
+ * remember=true（默认）: 30 天持久 cookie；remember=false: 会话级 cookie
  */
 import { verifyPassword, createSession } from './_utils.js';
 
@@ -20,7 +21,7 @@ export async function onRequest({ request, env }) {
     return Response.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { email, password } = body;
+  const { email, password, remember } = body;
   if (!email || !password) {
     return Response.json({ success: false, error: '缺少参数' }, { status: 400 });
   }
@@ -53,7 +54,7 @@ export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   let sessionHeaders;
   try {
-    const result = await createSession(env, user.id, url);
+    const result = await createSession(env, user.id, url, remember !== false);
     sessionHeaders = result.headers;
   } catch (err) {
     return Response.json(

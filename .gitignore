@@ -33,3 +33,4 @@ coverage
 .wrangler/
 .wrangler/state/v3/observability/miniflare-wobs-trace-store/a590acd76969f996ec6e4b599c3c09f58c283a76f2d61392b5d3046caf557602.sqlite-wal
 .zcode/plans/plan-sess_40b74b07-27e1-48f9-b015-2505505285e2.md
+.zcode/plans/plan-sess_6322efd3-bf38-43e3-b2c7-2311f7201b6e.md
