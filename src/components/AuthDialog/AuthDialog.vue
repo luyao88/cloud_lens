@@ -1,172 +1,176 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog'
-import { useToast } from '@/components/ui/toast/use-toast'
+import { ref, computed, watch } from 'vue';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useToast } from '@/components/ui/toast/use-toast';
 
-const props = defineProps<{ open: boolean }>()
+const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{
-  (e: 'update:open', value: boolean): void
-  (e: 'success'): void
-}>()
+  (e: 'update:open', value: boolean): void;
+  (e: 'success'): void;
+}>();
 
-const { toast } = useToast()
+const { toast } = useToast();
 
 /** step 状态：methods 方式选择 | email-login 登录 | email-register 注册 | email-verify 验证码 | email-forgot 忘记密码 */
-const step = ref<'methods' | 'email-login' | 'email-register' | 'email-verify' | 'email-forgot'>('methods')
+const step = ref<'methods' | 'email-login' | 'email-register' | 'email-verify' | 'email-forgot'>('methods');
 
 // 忘记密码子步骤：input 验证码输入 | reset 设置新密码
-const forgotStep = ref<'input' | 'reset'>('input')
+const forgotStep = ref<'input' | 'reset'>('input');
 
 // 表单数据
-const email = ref('')
-const password = ref('')
-const confirmPassword = ref('')
-const code = ref('')
+const email = ref('');
+const password = ref('');
+const confirmPassword = ref('');
+const code = ref('');
 // 注册流程：验证通过后拿到的临时 token
-const verifyToken = ref('')
+const verifyToken = ref('');
 // 忘记密码流程：验证通过后拿到的临时 token
-const resetToken = ref('')
+const resetToken = ref('');
 // 忘记密码：新密码
-const newPassword = ref('')
-const confirmNewPassword = ref('')
+const newPassword = ref('');
+const confirmNewPassword = ref('');
 // 记住我
-const rememberMe = ref(true)
+const rememberMe = ref(true);
+// 密码显示/隐藏
+const showPassword = ref(false);
+const showConfirmPassword = ref(false);
+const showNewPassword = ref(false);
+const showConfirmNewPassword = ref(false);
 // 重发验证码倒计时
-const countdown = ref(0)
-let countdownTimer: ReturnType<typeof setInterval> | null = null
+const countdown = ref(0);
+let countdownTimer: ReturnType<typeof setInterval> | null = null;
 
 // loading 态
-const submitting = ref(false)
+const submitting = ref(false);
 
 /** 弹窗标题 */
 const title = computed(() => {
   switch (step.value) {
     case 'methods':
-      return '登录镜云图床'
+      return '登录镜云图床';
     case 'email-login':
-      return '邮箱登录'
+      return '邮箱登录';
     case 'email-register':
-      return '注册新账号'
+      return '注册新账号';
     case 'email-verify':
-      return '验证邮箱'
+      return '验证邮箱';
     case 'email-forgot':
-      return forgotStep.value === 'reset' ? '设置新密码' : '重置密码'
+      return forgotStep.value === 'reset' ? '设置新密码' : '重置密码';
     default:
-      return '登录'
+      return '登录';
   }
-})
+});
 
 const desc = computed(() => {
   switch (step.value) {
     case 'methods':
-      return '选择一种方式继续'
+      return '选择一种方式继续';
     case 'email-login':
-      return '输入邮箱和密码登录'
+      return '输入邮箱和密码登录';
     case 'email-register':
-      return '输入邮箱和密码注册账号'
+      return '输入邮箱和密码注册账号';
     case 'email-verify':
-      return `验证码已发送至 ${email.value}`
+      return `验证码已发送至 ${email.value}`;
     case 'email-forgot':
-      return forgotStep.value === 'reset' ? '请输入新密码' : `验证码已发送至 ${email.value}`
+      return forgotStep.value === 'reset' ? '请输入新密码' : `验证码已发送至 ${email.value}`;
     default:
-      return ''
+      return '';
   }
-})
+});
 
 /** 弹窗开关变化时重置状态 */
 watch(
   () => props.open,
   (val) => {
     if (val) {
-      step.value = 'methods'
-      forgotStep.value = 'input'
-      email.value = ''
-      password.value = ''
-      confirmPassword.value = ''
-      code.value = ''
-      verifyToken.value = ''
-      resetToken.value = ''
-      newPassword.value = ''
-      confirmNewPassword.value = ''
-      rememberMe.value = true
-      countdown.value = 0
+      step.value = 'methods';
+      forgotStep.value = 'input';
+      email.value = '';
+      password.value = '';
+      confirmPassword.value = '';
+      code.value = '';
+      verifyToken.value = '';
+      resetToken.value = '';
+      newPassword.value = '';
+      confirmNewPassword.value = '';
+      rememberMe.value = true;
+      showPassword.value = false;
+      showConfirmPassword.value = false;
+      showNewPassword.value = false;
+      showConfirmNewPassword.value = false;
+      countdown.value = 0;
     }
   },
-)
+);
 
 /** ============ OAuth 登录（GitHub / Google）============ */
 function loginWithOAuth(provider: 'github' | 'google') {
   // 整页跳转到 OAuth 授权页，授权后回调 302 跳回首页
-  window.location.href = `/api/auth/${provider}`
+  window.location.href = `/api/auth/${provider}`;
 }
 
 /** ============ 邮箱注册流程 ============ */
 async function startRegister() {
   if (!email.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
-    toast({ title: '邮箱格式不正确', variant: 'destructive' })
-    return
+    toast({ title: '邮箱格式不正确', variant: 'destructive' });
+    return;
   }
   if (password.value.length < 6) {
-    toast({ title: '密码至少 6 位', variant: 'destructive' })
-    return
+    toast({ title: '密码至少 6 位', variant: 'destructive' });
+    return;
   }
   if (password.value !== confirmPassword.value) {
-    toast({ title: '两次密码不一致', variant: 'destructive' })
-    return
+    toast({ title: '两次密码不一致', variant: 'destructive' });
+    return;
   }
 
-  submitting.value = true
+  submitting.value = true;
   try {
     const res = await fetch('/api/auth/send-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.value, purpose: 'register' }),
-    })
-    const data = await res.json()
+    });
+    const data = await res.json();
     if (!data.success) {
-      toast({ title: '发送失败', description: data.error || '', variant: 'destructive' })
-      return
+      toast({ title: '发送失败', description: data.error || '', variant: 'destructive' });
+      return;
     }
-    step.value = 'email-verify'
-    startCountdown()
+    step.value = 'email-verify';
+    startCountdown();
   } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' })
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
 }
 
 /** 校验验证码 */
 async function verifyCode() {
   if (code.value.length !== 6) {
-    toast({ title: '请输入 6 位验证码', variant: 'destructive' })
-    return
+    toast({ title: '请输入 6 位验证码', variant: 'destructive' });
+    return;
   }
 
-  submitting.value = true
+  submitting.value = true;
   try {
     const res = await fetch('/api/auth/verify-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.value, code: code.value, purpose: 'register' }),
-    })
-    const data = await res.json()
+    });
+    const data = await res.json();
     if (!data.success) {
-      toast({ title: '验证失败', description: data.error || '', variant: 'destructive' })
-      return
+      toast({ title: '验证失败', description: data.error || '', variant: 'destructive' });
+      return;
     }
-    verifyToken.value = data.token
+    verifyToken.value = data.token;
     // 验证通过，执行注册
-    await doRegister()
+    await doRegister();
   } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' })
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
 }
 
@@ -180,69 +184,69 @@ async function doRegister() {
       password: password.value,
       token: verifyToken.value,
     }),
-  })
-  const data = await res.json()
+  });
+  const data = await res.json();
   if (!data.success) {
-    toast({ title: '注册失败', description: data.error || '', variant: 'destructive' })
-    return
+    toast({ title: '注册失败', description: data.error || '', variant: 'destructive' });
+    return;
   }
-  toast({ title: '注册成功', description: '已自动登录' })
-  emit('update:open', false)
-  emit('success')
+  toast({ title: '注册成功', description: '已自动登录' });
+  emit('update:open', false);
+  emit('success');
 }
 
 /** ============ 邮箱登录流程 ============ */
 async function doLogin() {
   if (!email.value || !password.value) {
-    toast({ title: '请填写邮箱和密码', variant: 'destructive' })
-    return
+    toast({ title: '请填写邮箱和密码', variant: 'destructive' });
+    return;
   }
 
-  submitting.value = true
+  submitting.value = true;
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.value, password: password.value, remember: rememberMe.value }),
-    })
-    const data = await res.json()
+    });
+    const data = await res.json();
     if (!data.success) {
-      toast({ title: '登录失败', description: data.error || '', variant: 'destructive' })
-      return
+      toast({ title: '登录失败', description: data.error || '', variant: 'destructive' });
+      return;
     }
-    toast({ title: '登录成功' })
-    emit('update:open', false)
-    emit('success')
+    toast({ title: '登录成功' });
+    emit('update:open', false);
+    emit('success');
   } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' })
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
 }
 
 /** ============ 验证码倒计时 ============ */
 function startCountdown() {
-  countdown.value = 60
+  countdown.value = 60;
   countdownTimer = setInterval(() => {
-    countdown.value--
+    countdown.value--;
     if (countdown.value <= 0 && countdownTimer) {
-      clearInterval(countdownTimer)
-      countdownTimer = null
+      clearInterval(countdownTimer);
+      countdownTimer = null;
     }
-  }, 1000)
+  }, 1000);
 }
 
 async function resendCode() {
-  if (countdown.value > 0) return
+  if (countdown.value > 0) return;
   const res = await fetch('/api/auth/send-code', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email.value, purpose: 'register' }),
-  })
-  const data = await res.json()
+  });
+  const data = await res.json();
   if (data.success) {
-    startCountdown()
-    toast({ title: '验证码已重新发送' })
+    startCountdown();
+    toast({ title: '验证码已重新发送' });
   }
 }
 
@@ -250,73 +254,73 @@ async function resendCode() {
 /** 进入忘记密码：先发一次验证码 */
 async function startForgot() {
   if (!email.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
-    toast({ title: '邮箱格式不正确', variant: 'destructive' })
-    return
+    toast({ title: '邮箱格式不正确', variant: 'destructive' });
+    return;
   }
 
-  submitting.value = true
+  submitting.value = true;
   try {
     const res = await fetch('/api/auth/send-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.value, purpose: 'reset' }),
-    })
-    const data = await res.json()
+    });
+    const data = await res.json();
     if (!data.success) {
-      toast({ title: '发送失败', description: data.error || '', variant: 'destructive' })
-      return
+      toast({ title: '发送失败', description: data.error || '', variant: 'destructive' });
+      return;
     }
-    step.value = 'email-forgot'
-    forgotStep.value = 'input'
-    code.value = ''
-    startCountdown()
+    step.value = 'email-forgot';
+    forgotStep.value = 'input';
+    code.value = '';
+    startCountdown();
   } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' })
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
 }
 
 /** 校验忘记密码验证码 */
 async function verifyForgotCode() {
   if (code.value.length !== 6) {
-    toast({ title: '请输入 6 位验证码', variant: 'destructive' })
-    return
+    toast({ title: '请输入 6 位验证码', variant: 'destructive' });
+    return;
   }
 
-  submitting.value = true
+  submitting.value = true;
   try {
     const res = await fetch('/api/auth/verify-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.value, code: code.value, purpose: 'reset' }),
-    })
-    const data = await res.json()
+    });
+    const data = await res.json();
     if (!data.success) {
-      toast({ title: '验证失败', description: data.error || '', variant: 'destructive' })
-      return
+      toast({ title: '验证失败', description: data.error || '', variant: 'destructive' });
+      return;
     }
-    resetToken.value = data.token
-    forgotStep.value = 'reset'
+    resetToken.value = data.token;
+    forgotStep.value = 'reset';
   } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' })
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
 }
 
 /** 重置密码 */
 async function doResetPassword() {
   if (newPassword.value.length < 6) {
-    toast({ title: '密码至少 6 位', variant: 'destructive' })
-    return
+    toast({ title: '密码至少 6 位', variant: 'destructive' });
+    return;
   }
   if (newPassword.value !== confirmNewPassword.value) {
-    toast({ title: '两次密码不一致', variant: 'destructive' })
-    return
+    toast({ title: '两次密码不一致', variant: 'destructive' });
+    return;
   }
 
-  submitting.value = true
+  submitting.value = true;
   try {
     const res = await fetch('/api/auth/reset-password', {
       method: 'POST',
@@ -326,57 +330,57 @@ async function doResetPassword() {
         password: newPassword.value,
         token: resetToken.value,
       }),
-    })
-    const data = await res.json()
+    });
+    const data = await res.json();
     if (!data.success) {
-      toast({ title: '重置失败', description: data.error || '', variant: 'destructive' })
-      return
+      toast({ title: '重置失败', description: data.error || '', variant: 'destructive' });
+      return;
     }
-    toast({ title: '密码重置成功', description: '请使用新密码登录' })
+    toast({ title: '密码重置成功', description: '请使用新密码登录' });
     // 清空密码相关字段，切回登录页
-    password.value = ''
-    newPassword.value = ''
-    confirmNewPassword.value = ''
-    code.value = ''
-    resetToken.value = ''
-    step.value = 'email-login'
+    password.value = '';
+    newPassword.value = '';
+    confirmNewPassword.value = '';
+    code.value = '';
+    resetToken.value = '';
+    step.value = 'email-login';
   } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' })
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
 }
 
 /** 重发忘记密码验证码 */
 async function resendForgotCode() {
-  if (countdown.value > 0) return
+  if (countdown.value > 0) return;
   const res = await fetch('/api/auth/send-code', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email.value, purpose: 'reset' }),
-  })
-  const data = await res.json()
+  });
+  const data = await res.json();
   if (data.success) {
-    startCountdown()
-    toast({ title: '验证码已重新发送' })
+    startCountdown();
+    toast({ title: '验证码已重新发送' });
   } else {
-    toast({ title: '发送失败', description: data.error || '', variant: 'destructive' })
+    toast({ title: '发送失败', description: data.error || '', variant: 'destructive' });
   }
 }
 
 /** 提交按钮（根据 step 分发） */
 async function handleSubmit() {
   if (step.value === 'email-register') {
-    await startRegister()
+    await startRegister();
   } else if (step.value === 'email-verify') {
-    await verifyCode()
+    await verifyCode();
   } else if (step.value === 'email-login') {
-    await doLogin()
+    await doLogin();
   } else if (step.value === 'email-forgot') {
     if (forgotStep.value === 'input') {
-      await verifyForgotCode()
+      await verifyForgotCode();
     } else {
-      await doResetPassword()
+      await doResetPassword();
     }
   }
 }
@@ -392,10 +396,7 @@ async function handleSubmit() {
 
       <!-- step 1: 登录方式选择 -->
       <div v-if="step === 'methods'" class="flex flex-col gap-3">
-        <button
-          class="auth-method-btn"
-          @click="loginWithOAuth('github')"
-        >
+        <button class="auth-method-btn" @click="loginWithOAuth('github')">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path
               d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"
@@ -404,45 +405,66 @@ async function handleSubmit() {
           <span>使用 GitHub 登录</span>
         </button>
 
-        <button
-          class="auth-method-btn"
-          @click="loginWithOAuth('google')"
-        >
+        <button class="auth-method-btn" @click="loginWithOAuth('google')">
           <svg viewBox="0 0 24 24" width="20" height="20">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
           <span>使用 Google 登录</span>
         </button>
 
         <button class="auth-method-btn" @click="step = 'email-login'">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="4" width="20" height="16" rx="2"/>
-            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
           </svg>
           <span>使用邮箱密码登录</span>
         </button>
       </div>
 
       <!-- step 2/3: 邮箱登录 / 注册 -->
-      <form
-        v-else-if="step === 'email-login' || step === 'email-register'"
-        class="flex flex-col gap-3"
-        @submit.prevent="handleSubmit"
-      >
+      <form v-else-if="step === 'email-login' || step === 'email-register'" class="flex flex-col gap-3" @submit.prevent="handleSubmit">
         <label class="auth-field">
           <span class="auth-label">邮箱</span>
           <input v-model="email" type="email" class="auth-input" placeholder="you@example.com" required />
         </label>
         <label class="auth-field">
           <span class="auth-label">密码</span>
-          <input v-model="password" type="password" class="auth-input" placeholder="至少 6 位" required />
+          <div class="password-wrap">
+            <input v-model="password" :type="showPassword ? 'text' : 'password'" autocomplete="current-password" class="auth-input" placeholder="至少 6 位" required />
+            <button type="button" class="password-toggle" @click="showPassword = !showPassword">
+              <svg v-if="!showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                <line x1="2" x2="22" y1="2" y2="22" />
+              </svg>
+            </button>
+          </div>
         </label>
         <label v-if="step === 'email-register'" class="auth-field">
           <span class="auth-label">确认密码</span>
-          <input v-model="confirmPassword" type="password" class="auth-input" placeholder="再次输入密码" required />
+          <div class="password-wrap">
+            <input v-model="confirmPassword" :type="showConfirmPassword ? 'text' : 'password'" autocomplete="new-password" class="auth-input" placeholder="再次输入密码" required />
+            <button type="button" class="password-toggle" @click="showConfirmPassword = !showConfirmPassword">
+              <svg v-if="!showConfirmPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                <line x1="2" x2="22" y1="2" y2="22" />
+              </svg>
+            </button>
+          </div>
         </label>
 
         <!-- 记住我（仅登录） -->
@@ -471,26 +493,11 @@ async function handleSubmit() {
       </form>
 
       <!-- step 4: 验证码 -->
-      <form
-        v-else-if="step === 'email-verify'"
-        class="flex flex-col gap-3"
-        @submit.prevent="verifyCode"
-      >
-        <p class="text-sm text-muted-foreground">
-          已向 {{ email }} 发送 6 位验证码，请输入。
-        </p>
+      <form v-else-if="step === 'email-verify'" class="flex flex-col gap-3" @submit.prevent="verifyCode">
+        <p class="text-sm text-muted-foreground">已向 {{ email }} 发送 6 位验证码，请输入。</p>
         <div class="auth-field">
           <span class="auth-label">验证码</span>
-          <input
-            v-model="code"
-            type="text"
-            maxlength="6"
-            autocomplete="one-time-code"
-            class="auth-input tracking-[0.5em] text-center"
-            placeholder="------"
-            @paste="$nextTick(() => {})"
-            required
-          />
+          <input v-model="code" type="text" maxlength="6" autocomplete="one-time-code" class="auth-input tracking-[0.5em] text-center" placeholder="------" required />
         </div>
 
         <button type="submit" class="auth-submit-btn" :disabled="submitting">
@@ -507,27 +514,13 @@ async function handleSubmit() {
       </form>
 
       <!-- step 5: 忘记密码 -->
-      <form
-        v-else-if="step === 'email-forgot'"
-        class="flex flex-col gap-3"
-        @submit.prevent="handleSubmit"
-      >
+      <form v-else-if="step === 'email-forgot'" class="flex flex-col gap-3" @submit.prevent="handleSubmit">
         <!-- 子步骤 1：输入验证码 -->
         <template v-if="forgotStep === 'input'">
-          <p class="text-sm text-muted-foreground">
-            已向 {{ email }} 发送 6 位验证码，请输入。
-          </p>
+          <p class="text-sm text-muted-foreground">已向 {{ email }} 发送 6 位验证码，请输入。</p>
           <div class="auth-field">
             <span class="auth-label">验证码</span>
-            <input
-              v-model="code"
-              type="text"
-              maxlength="6"
-              autocomplete="one-time-code"
-              class="auth-input tracking-[0.5em] text-center"
-              placeholder="------"
-              required
-            />
+            <input v-model="code" type="text" maxlength="6" autocomplete="one-time-code" class="auth-input tracking-[0.5em] text-center" placeholder="------" required />
           </div>
 
           <button type="submit" class="auth-submit-btn" :disabled="submitting">
@@ -545,11 +538,39 @@ async function handleSubmit() {
         <template v-else>
           <label class="auth-field">
             <span class="auth-label">新密码</span>
-            <input v-model="newPassword" type="password" class="auth-input" placeholder="至少 6 位" required />
+            <div class="password-wrap">
+              <input v-model="newPassword" :type="showNewPassword ? 'text' : 'password'" autocomplete="new-password" class="auth-input" placeholder="至少 6 位" required />
+              <button type="button" class="password-toggle" @click="showNewPassword = !showNewPassword">
+                <svg v-if="!showNewPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <line x1="2" x2="22" y1="2" y2="22" />
+                </svg>
+              </button>
+            </div>
           </label>
           <label class="auth-field">
             <span class="auth-label">确认新密码</span>
-            <input v-model="confirmNewPassword" type="password" class="auth-input" placeholder="再次输入新密码" required />
+            <div class="password-wrap">
+              <input v-model="confirmNewPassword" :type="showConfirmNewPassword ? 'text' : 'password'" autocomplete="new-password" class="auth-input" placeholder="再次输入新密码" required />
+              <button type="button" class="password-toggle" @click="showConfirmNewPassword = !showConfirmNewPassword">
+                <svg v-if="!showConfirmNewPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <line x1="2" x2="22" y1="2" y2="22" />
+                </svg>
+              </button>
+            </div>
           </label>
 
           <button type="submit" class="auth-submit-btn" :disabled="submitting">
@@ -577,7 +598,9 @@ async function handleSubmit() {
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s;
 }
 
 .auth-method-btn:hover {
@@ -622,12 +645,48 @@ async function handleSubmit() {
   color: hsl(var(--foreground));
   font-size: 0.875rem;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .auth-input:focus {
   border-color: hsl(var(--primary));
   box-shadow: 0 0 0 2px hsl(var(--ring));
+}
+
+/* 密码输入框容器 */
+.password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrap .auth-input {
+  width: 100%;
+  padding-right: 2.5rem;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+}
+
+.password-toggle svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.password-toggle:hover {
+  color: hsl(var(--foreground));
 }
 
 .auth-submit-btn {
