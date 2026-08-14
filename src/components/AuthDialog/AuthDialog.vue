@@ -104,7 +104,7 @@ watch(
 );
 
 /** ============ OAuth 登录（GitHub / Google）============ */
-function loginWithOAuth(provider: 'github' | 'google') {
+function loginWithOAuth(provider: 'github' | 'google' | 'gitee') {
   // 整页跳转到 OAuth 授权页，授权后回调 302 跳回首页
   window.location.href = `/api/auth/${provider}`;
 }
@@ -253,7 +253,11 @@ async function resendCode() {
 /** ============ 忘记密码流程 ============ */
 /** 进入忘记密码：先发一次验证码 */
 async function startForgot() {
-  if (!email.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
+  if (!email.value) {
+    toast({ title: '请先填写邮箱', variant: 'destructive' });
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
     toast({ title: '邮箱格式不正确', variant: 'destructive' });
     return;
   }
@@ -415,6 +419,17 @@ async function handleSubmit() {
           <span>使用 Google 登录</span>
         </button>
 
+        <button class="auth-method-btn" @click="loginWithOAuth('gitee')">
+          <svg viewBox="0 0 90 90" width="20" height="20">
+            <circle cx="44.85" cy="44.85" r="44.85" fill="#C71D23" />
+            <path
+              d="M67.56,39.87 L42.09,39.87 C40.86,39.87 39.87,40.86 39.87,42.09 L39.87,47.62 C39.87,48.85 40.86,49.84 42.08,49.84 L57.59,49.84 C58.81,49.84 59.81,50.83 59.81,52.05 L59.81,53.16 C59.81,56.83 56.83,59.81 53.16,59.81 L32.12,59.81 C30.89,59.81 29.9,58.81 29.9,57.59 L29.9,36.55 C29.9,32.88 32.88,29.9 36.55,29.9 L67.55,29.9 C68.78,29.9 69.77,28.91 69.77,27.69 L69.77,22.15 C69.77,20.93 68.78,19.94 67.56,19.94 L36.55,19.94 C27.37,19.94 19.94,27.37 19.94,36.55 L19.94,67.56 C19.94,68.78 20.93,69.77 22.15,69.77 L54.82,69.77 C63.08,69.77 69.77,63.08 69.77,54.82 L69.77,42.09 C69.77,40.86 68.78,39.87 67.56,39.87 Z"
+              fill="#FFFFFF"
+            />
+          </svg>
+          <span>使用 Gitee 登录</span>
+        </button>
+
         <button class="auth-method-btn" @click="step = 'email-login'">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="4" width="20" height="16" rx="2" />
@@ -467,11 +482,14 @@ async function handleSubmit() {
           </div>
         </label>
 
-        <!-- 记住我（仅登录） -->
-        <label v-if="step === 'email-login'" class="auth-remember">
-          <input type="checkbox" v-model="rememberMe" />
-          <span>记住我</span>
-        </label>
+        <!-- 记住我 + 忘记密码（仅登录） -->
+        <div v-if="step === 'email-login'" class="auth-remember-row">
+          <label class="auth-remember">
+            <input type="checkbox" v-model="rememberMe" />
+            <span>记住我</span>
+          </label>
+          <a class="auth-link" @click="startForgot">忘记密码？</a>
+        </div>
 
         <button type="submit" class="auth-submit-btn" :disabled="submitting">
           {{ submitting ? '处理中...' : step === 'email-register' ? '注册' : '登录' }}
@@ -487,9 +505,6 @@ async function handleSubmit() {
             <a class="auth-link" @click="step = 'email-login'">去登录</a>
           </template>
         </div>
-
-        <!-- 忘记密码（仅登录） -->
-        <a v-if="step === 'email-login'" class="auth-switch" @click="startForgot">忘记密码？</a>
       </form>
 
       <!-- step 4: 验证码 -->
@@ -603,6 +618,13 @@ async function handleSubmit() {
     border-color 0.2s;
 }
 
+.auth-method-btn svg,
+.auth-method-btn img {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
 .auth-method-btn:hover {
   background: hsl(var(--accent));
   border-color: hsl(var(--primary));
@@ -612,6 +634,13 @@ async function handleSubmit() {
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
+}
+
+.auth-remember-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
 }
 
 .auth-remember {

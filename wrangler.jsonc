@@ -11,6 +11,7 @@
 	],
 	"vars": {
 		"GITHUB_CLIENT_ID": "Ov23lixb4bVfNFJtQI6M",
-		"OAUTH_REDIRECT_ORIGIN": "https://cloudlens.190223.xyz"
+		"OAUTH_REDIRECT_ORIGIN": "https://cloudlens.190223.xyz",
+		"GITEE_CLIENT_ID": "355784fbdbd76b22cb8f7c9f22886634b9ca57d930d49a9df216cc10dcee3f5b"
 	}
 }
