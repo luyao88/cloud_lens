@@ -38,6 +38,7 @@
               </div>
             </div>
             <hr />
+            <router-link to="/profile" class="dropdown-item" @click="showMenu = false">我的主页</router-link>
             <a href="/api/auth/logout" class="dropdown-item">Logout</a>
           </div>
         </div>

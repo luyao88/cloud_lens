@@ -1,10 +1,16 @@
 /**
  * /api/images
  *
- * 保存上传成功的图片信息到数据库。
- * 上传仍走 /upload（匿名），上传成功后前端调用本接口持久化记录。
+ * GET  分页查询当前登录用户的上传记录（个人主页用）
+ * POST 保存上传成功的图片信息到数据库。
+ *      上传仍走 /upload（匿名），上传成功后前端调用本接口持久化记录。
  *
- * 请求：POST /api/images，JSON body
+ * GET 请求：GET /api/images?limit=100&offset=0
+ * 响应：
+ *   200 { success: true, images: [...], stats: { total, totalSize } }
+ *   401 { success: false, error: '请先登录' }
+ *
+ * POST 请求：POST /api/images，JSON body
  *   {
  *     imgur_id:    string,   // Imgur 图片ID
  *     imgur_url:   string,   // Imgur 图片地址（必填）
@@ -20,6 +26,39 @@
  *   401 { success: false, error: '请先登录' } // 未登录
  */
 import { getUserFromRequest } from '../auth/_utils.js';
+
+export async function onRequestGet({ request, env }) {
+  // 鉴权：必须登录
+  const { user } = await getUserFromRequest(request, env);
+  if (!user) {
+    return Response.json({ success: false, error: '请先登录' }, { status: 401 });
+  }
+
+  // 分页参数（limit 默认 100，上限 500）
+  const { searchParams } = new URL(request.url);
+  let limit = parseInt(searchParams.get('limit') || '100', 10);
+  let offset = parseInt(searchParams.get('offset') || '0', 10);
+  if (!Number.isFinite(limit) || limit <= 0) limit = 100;
+  if (limit > 500) limit = 500;
+  if (!Number.isFinite(offset) || offset < 0) offset = 0;
+
+  const { results: images } = await env.cloud_lens_data
+    .prepare(
+      `SELECT id, imgur_id, imgur_url, filename, size, tags, created_at
+       FROM images WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+    )
+    .bind(user.id, limit, offset)
+    .all();
+
+  const stats = await env.cloud_lens_data
+    .prepare(
+      `SELECT COUNT(*) AS total, COALESCE(SUM(size), 0) AS totalSize FROM images WHERE user_id = ?`,
+    )
+    .bind(user.id)
+    .first();
+
+  return Response.json({ success: true, images, stats });
+}
 
 export async function onRequestPost({ request, env }) {
   // 鉴权：必须登录

@@ -133,12 +133,19 @@ const fileUpload = async (FileListArr: Array<any>) => {
       const result = await res.json();
       i.upload_result = result;
       i.upload_result._vh_filename = i.name;
+      // 校验上传结果：HTTP 状态异常或未返回图片链接均视为失败，不再调用保存接口
+      if (!res.ok || !result?.data?.link) {
+        i.upload_status = 'error';
+        toast({ title: '上传失败', description: result?.error || `HTTP ${res.status}`, variant: 'destructive' });
+        return;
+      }
       i.upload_status = 'success';
       // 上传成功后保存到服务器（需要登录，未登录静默跳过，不影响上传结果）
       saveImage(result, i.name, i.size);
     } catch (error) {
       i.upload_status = 'error';
       i.upload_result = error;
+      toast({ title: '上传失败', description: (error as Error)?.message || '网络异常', variant: 'destructive' });
     } finally {
       // 同步上传状态======
       i.upload_progress = 100;
@@ -150,6 +157,8 @@ const fileUpload = async (FileListArr: Array<any>) => {
 
 // 保存上传成功的图片信息到服务器（需要登录，未登录/失败均静默处理）
 const saveImage = (result: any, filename: string, size: number) => {
+  // 防御：没有拿到 Imgur 链接时不保存
+  if (!result?.data?.link) return;
   fetch('/api/images', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -17,6 +17,11 @@ const router = createRouter({
       name: 'VideoToImage',
       component: () => import('@/views/VideoToImage/VideoToImage.vue'),
     },
+    {
+      path: '/profile',
+      name: 'Profile',
+      component: () => import('@/views/Profile/Profile.vue'),
+    },
   ],
 })
 
