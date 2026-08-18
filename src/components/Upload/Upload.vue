@@ -130,13 +130,26 @@ const fileUpload = async (FileListArr: Array<any>) => {
         method: 'POST',
         body: formData,
       });
-      const result = await res.json();
+      // 网关错误（如 Cloudflare 413/502）返回的是 HTML 页面，res.json() 会抛错，这里容错解析
+      let result: any = null;
+      try {
+        result = await res.json();
+      } catch {
+        result = null;
+      }
       i.upload_result = result;
       i.upload_result._vh_filename = i.name;
       // 校验上传结果：HTTP 状态异常或未返回图片链接均视为失败，不再调用保存接口
       if (!res.ok || !result?.data?.link) {
         i.upload_status = 'error';
-        toast({ title: '上传失败', description: result?.error || `HTTP ${res.status}`, variant: 'destructive' });
+        const desc =
+          result?.error ||
+          (res.status === 413
+            ? '文件过大，超过 100MB 上传上限'
+            : result
+              ? `HTTP ${res.status}`
+              : `服务异常（HTTP ${res.status}）`);
+        toast({ title: '上传失败', description: desc, variant: 'destructive' });
         return;
       }
       i.upload_status = 'success';

@@ -13,7 +13,7 @@
           </div>
           <div class="stat-divider"></div>
           <div class="stat">
-            <span class="stat-num">200<span class="stat-unit">MB</span></span>
+            <span class="stat-num">100<span class="stat-unit">MB</span></span>
             <span class="stat-label">单文件上限</span>
           </div>
           <div class="stat-divider"></div>
@@ -113,9 +113,9 @@ const nodeHost = ref<string>(import.meta.env.VITE_IMG_API_URL || location.origin
 const uploadAPI = ref<string>(`${import.meta.env.VITE_IMG_API_URL || location.origin}/upload`);
 // 上传配置
 const UploadConfig = ref<any>({
-  AcceptTypes: 'image/jpeg,image/png,image/gif,image/apng,image/tiff,image/bmp,image/webp,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska', // Imgur支持的图片和视频格式
+  AcceptTypes: 'image/jpeg,image/png,image/gif,image/apng,image/tiff,image/bmp,image/webp,video/mp4,video/webm', // Imgur匿名上传实际支持的格式（MOV/AVI/MKV会被Imgur拒绝）
   Max: 0, //多选个数，0为不限制
-  MaxSize: 200, //单个文件大小限制，单位：MB（Imgur视频上限200MB）
+  MaxSize: 100, //单个文件大小限制，单位：MB（Cloudflare 免费版请求体上限 100MB，超过会被 413 拒绝）
 });
 // 上传列表
 const fileList = ref<Array<any>>(JSON.parse(localStorage.getItem('zychUpImageList') || '[]'));
