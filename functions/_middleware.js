@@ -12,8 +12,6 @@ export async function onRequest(context) {
     return new Response(
       JSON.stringify({
         error: 'Internal Server Error',
-        message: err?.message || String(err),
-        stack: err?.stack?.split('\n').slice(0, 5).join('\n'),
       }),
       {
         status: 500,

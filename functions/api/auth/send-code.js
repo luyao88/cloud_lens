@@ -32,10 +32,7 @@ export async function onRequest({ request, env }) {
 
   // 注册前检查：邮箱是否已注册
   if (purpose === 'register') {
-    const existing = await env.cloud_lens_data
-      .prepare('SELECT id FROM users WHERE provider = ? AND provider_id = ?')
-      .bind('email', email)
-      .first();
+    const existing = await env.cloud_lens_data.prepare('SELECT id FROM users WHERE provider = ? AND provider_id = ?').bind('email', email).first();
     if (existing) {
       return Response.json({ success: false, error: '该邮箱已注册' }, { status: 400 });
     }
@@ -43,10 +40,7 @@ export async function onRequest({ request, env }) {
 
   // 登录/重置密码前检查：邮箱是否已注册
   if (purpose === 'login' || purpose === 'reset') {
-    const existing = await env.cloud_lens_data
-      .prepare('SELECT id FROM users WHERE provider = ? AND provider_id = ?')
-      .bind('email', email)
-      .first();
+    const existing = await env.cloud_lens_data.prepare('SELECT id FROM users WHERE provider = ? AND provider_id = ?').bind('email', email).first();
     if (!existing) {
       return Response.json({ success: false, error: '该邮箱未注册' }, { status: 400 });
     }
@@ -58,22 +52,11 @@ export async function onRequest({ request, env }) {
 
   // 存入数据库（先使该邮箱之前的未使用验证码失效）
   try {
-    await env.cloud_lens_data
-      .prepare('UPDATE verification_codes SET used = 1 WHERE email = ? AND used = 0')
-      .bind(email)
-      .run();
+    await env.cloud_lens_data.prepare('UPDATE verification_codes SET used = 1 WHERE email = ? AND used = 0').bind(email).run();
 
-    await env.cloud_lens_data
-      .prepare(
-        `INSERT INTO verification_codes (email, code, purpose, expires_at) VALUES (?, ?, ?, ?)`,
-      )
-      .bind(email, code, purpose, expiresAt)
-      .run();
+    await env.cloud_lens_data.prepare(`INSERT INTO verification_codes (email, code, purpose, expires_at) VALUES (?, ?, ?, ?)`).bind(email, code, purpose, expiresAt).run();
   } catch (err) {
-    return Response.json(
-      { success: false, error: 'Database error', message: err.message },
-      { status: 500 },
-    );
+    return Response.json({ success: false, error: '服务器内部错误' }, { status: 500 });
   }
 
   // 调用 Resend API 发送邮件
@@ -105,16 +88,10 @@ export async function onRequest({ request, env }) {
 
     if (!res.ok) {
       const errText = await res.text();
-      return Response.json(
-        { success: false, error: '邮件发送失败', detail: errText },
-        { status: 500 },
-      );
+      return Response.json({ success: false, error: '邮件发送失败', detail: errText }, { status: 500 });
     }
   } catch (err) {
-    return Response.json(
-      { success: false, error: '邮件发送异常', message: err.message },
-      { status: 500 },
-    );
+    return Response.json({ success: false, error: '邮件发送失败' }, { status: 500 });
   }
 
   return Response.json({ success: true });

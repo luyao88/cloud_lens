@@ -90,20 +90,12 @@
         <p>Cloudflare Pages 托管，每日 10 万次免费请求，零成本运维</p>
       </div>
     </div>
-
-    <!-- 返回顶部按钮 -->
-    <Transition name="fade-slide">
-      <button v-show="showBackTop" class="back-top" @click="scrollToTop">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="m18 15-6-6-6 6" />
-        </svg>
-      </button>
-    </Transition>
   </section>
 </template>
 <script setup lang="ts">
+defineOptions({ name: 'Home' });
 import vh from 'vh-plugin';
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref } from 'vue';
 import Upload from '@/components/Upload/Upload.vue';
 import ResList from '@/components/ResList/ResList.vue';
 import { useUploadManager } from '@/composables/useUploadManager';
@@ -114,21 +106,6 @@ const UploadConfig = ref<any>({
   AcceptTypes: 'image/jpeg,image/png,image/gif,image/apng,image/tiff,image/bmp,image/webp,video/mp4,video/webm', // Imgur匿名上传实际支持的格式（MOV/AVI/MKV会被Imgur拒绝）
   Max: 0, //多选个数，0为不限制
   MaxSize: 100, //单个文件大小限制，单位：MB（Cloudflare 免费版请求体上限 100MB，超过会被 413 拒绝）
-});
-
-// 返回顶部
-const showBackTop = ref(false);
-const handleScroll = () => {
-  showBackTop.value = window.scrollY > 300;
-};
-const scrollToTop = () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-onMounted(() => {
-  window.addEventListener('scroll', handleScroll);
-});
-onUnmounted(() => {
-  window.removeEventListener('scroll', handleScroll);
 });
 </script>
 

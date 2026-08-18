@@ -1,6 +1,12 @@
 <template>
   <Header title="镜云图床 CloudLens" desc="免费无限图床" />
-  <main><RouterView /></main>
+  <main>
+    <RouterView v-slot="{ Component }">
+      <keep-alive :include="['Home', 'Legal']">
+        <component :is="Component" />
+      </keep-alive>
+    </RouterView>
+  </main>
   <Footer />
   <UploadTray />
   <Toaster />

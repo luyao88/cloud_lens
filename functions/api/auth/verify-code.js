@@ -1,11 +1,13 @@
 /**
  * /api/auth/verify-code
  *
- * 校验验证码，返回临时 token（用于后续注册接口）
+ * 校验验证码，返回带签名的临时 token（用于后续注册/重置密码接口）
  * POST body: { email, code, purpose }
  *
- * 临时 token = base64(JSON({ email, purpose, exp }))
+ * 临时 token = base64(JSON({ email, purpose, exp })) + '.' + HMAC-SHA256 签名
  */
+import { signedToken } from './_utils.js';
+
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
     return Response.json({ success: false, error: 'Method not allowed' }, { status: 405 });
@@ -35,10 +37,7 @@ export async function onRequest({ request, env }) {
       .bind(email, code)
       .first();
   } catch (err) {
-    return Response.json(
-      { success: false, error: 'Database error', message: err.message },
-      { status: 500 },
-    );
+    return Response.json({ success: false, error: '服务器内部错误' }, { status: 500 });
   }
 
   if (!record) {
@@ -62,19 +61,16 @@ export async function onRequest({ request, env }) {
       .bind(record.id)
       .run();
   } catch (err) {
-    return Response.json(
-      { success: false, error: 'Database error', message: err.message },
-      { status: 500 },
-    );
+    return Response.json({ success: false, error: '服务器内部错误' }, { status: 500 });
   }
 
-  // 生成临时 token（10 分钟有效）
+  // 生成带签名的临时 token（10 分钟有效）
   const tokenData = {
     email,
     purpose: record.purpose,
     exp: Date.now() + 10 * 60 * 1000,
   };
-  const token = btoa(JSON.stringify(tokenData));
+  const token = await signedToken(tokenData);
 
   return Response.json({ success: true, token });
 }

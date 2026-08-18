@@ -4,13 +4,12 @@
  * 上传队列与状态脱离路由组件存在，切换页面不影响进行中的上传；
  * 任意页面通过悬浮托盘（UploadTray）查看进度、重试、复制链接。
  *
- * 数据结构兼容旧版 localStorage（zychUpImageList）中已保存的成功记录。
+ * 注意：上传状态仅在当前会话保持，刷新页面后上传中的项目会丢失，
+ * 不会从 localStorage 恢复历史记录，避免误判。
  */
-import { reactive, computed } from 'vue';
-import { formatURL } from '@/utils/index';
+import { reactive, computed, watch } from 'vue';
 import { useToast } from '@/components/ui/toast/use-toast';
 
-const STORAGE_KEY = 'zychUpImageList';
 const nodeHost = import.meta.env.VITE_IMG_API_URL || location.origin;
 const uploadAPI = `${nodeHost}/upload`;
 
@@ -18,7 +17,7 @@ export type UploadStatus = 'uploading' | 'success' | 'error';
 
 export interface UploadItem {
   id: string;
-  file: File | null; // 从 localStorage 恢复的历史记录没有 file，无法重试
+  file: File | null;
   name: string;
   size: number;
   upload_status: UploadStatus;
@@ -33,42 +32,6 @@ export interface UploadItem {
 const items = reactive<UploadItem[]>([]);
 let idCounter = 0;
 const genId = () => `up_${Date.now()}_${idCounter++}_${Math.random().toString(36).slice(2, 6)}`;
-
-// ===== 初始化：恢复历史成功记录 =====
-try {
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  saved.forEach((i: any) => {
-    if (!i?.upload_result?.data?.link) return;
-    items.push({
-      id: genId(),
-      file: null,
-      name: i.upload_result._vh_filename || i.name || '已上传文件',
-      size: i.upload_result.data.size || i.size || 0,
-      upload_status: 'success',
-      upload_progress: 100,
-      upload_blob: i.upload_blob || formatURL({ nodeHost }, i.upload_result),
-      upload_type: i.upload_type || (String(i.upload_result.data.type || '').startsWith('video') ? 'video' : 'image'),
-      upload_result: i.upload_result,
-    });
-  });
-} catch {
-  // 历史数据损坏时静默忽略
-}
-
-// ===== 持久化：仅保存成功记录，结构与旧版一致 =====
-const persist = () => {
-  const success = items
-    .filter((i) => i.upload_status === 'success' && i.upload_result?.data?.link)
-    .map((i) => ({
-      upload_status: i.upload_status,
-      upload_blob: formatURL({ nodeHost }, i.upload_result),
-      upload_type: i.upload_type,
-      upload_result: { ...i.upload_result, _vh_filename: i.name },
-      name: i.name,
-      size: i.size,
-    }));
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(success));
-};
 
 // 上传成功后保存到服务器（需要登录，未登录静默跳过，不影响上传结果）
 const saveImage = (item: UploadItem) => {
@@ -115,13 +78,10 @@ const uploadItem = (item: UploadItem) => {
       item.upload_progress = 100;
       item.upload_result = { ...result, _vh_filename: item.name };
       item.upload_status = 'success';
-      persist();
       saveImage(item);
     } else {
       item.upload_status = 'error';
-      item.error =
-        result?.error ||
-        (xhr.status === 413 ? '文件过大，超过 100MB 上传上限' : result ? `HTTP ${xhr.status}` : `服务异常（HTTP ${xhr.status}）`);
+      item.error = result?.error || (xhr.status === 413 ? '文件过大，超过 100MB 上传上限' : result ? `HTTP ${xhr.status}` : `服务异常（HTTP ${xhr.status}）`);
       toast({ title: '上传失败', description: `${item.name}：${item.error}`, variant: 'destructive' });
     }
   };
@@ -143,7 +103,7 @@ const releaseItem = (item: UploadItem) => {
     }
     item.xhr = null;
   }
-  // objectURL 只在本次会话创建时释放（历史记录的 blob 是站点链接，不能 revoke）
+  // 释放 blob URL（仅当前会话创建的 objectURL 需要 revoke）
   if (item.file && item.upload_blob.startsWith('blob:')) URL.revokeObjectURL(item.upload_blob);
 };
 
@@ -177,7 +137,6 @@ const removeItem = (id: string) => {
   if (idx === -1) return;
   releaseItem(items[idx]);
   items.splice(idx, 1);
-  persist();
 };
 
 // 供 ResList 这类以数组整体回写删除/清空的组件使用
@@ -185,7 +144,6 @@ const setItems = (list: UploadItem[]) => {
   const kept = new Set(list);
   items.filter((i) => !kept.has(i)).forEach(releaseItem);
   items.splice(0, items.length, ...list);
-  persist();
 };
 
 const clearFinished = () => {
@@ -223,5 +181,21 @@ export const useUploadManager = () => ({
   hasSuccessUpload,
   overallProgress,
 });
+
+// ===== 刷新前警告：上传中拦截 beforeunload，避免上传被打断 =====
+const beforeUnloadHandler = (e: BeforeUnloadEvent) => {
+  e.preventDefault();
+  e.returnValue = '';
+};
+watch(
+  () => hasActive.value,
+  (active) => {
+    if (active) {
+      window.addEventListener('beforeunload', beforeUnloadHandler);
+    } else {
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
+    }
+  },
+);
 
 export type UploadManager = ReturnType<typeof useUploadManager>;

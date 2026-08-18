@@ -3,11 +3,11 @@
  *
  * 邮箱密码注册
  * POST body: { email, password, token }
- * token 是 verify-code 返回的临时 token
+ * token 是 verify-code 返回的带 HMAC 签名的临时 token
  *
  * 注册成功后自动创建 session 并返回 cookie
  */
-import { hashPassword, createSession } from './_utils.js';
+import { hashPassword, createSession, verifySignedToken } from './_utils.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -26,11 +26,9 @@ export async function onRequest({ request, env }) {
     return Response.json({ success: false, error: '缺少参数' }, { status: 400 });
   }
 
-  // 验证 token
-  let tokenData;
-  try {
-    tokenData = JSON.parse(atob(token));
-  } catch {
+  // 验证带签名的 token
+  const tokenData = await verifySignedToken(token);
+  if (!tokenData) {
     return Response.json({ success: false, error: '无效的 token' }, { status: 400 });
   }
 
@@ -72,7 +70,7 @@ export async function onRequest({ request, env }) {
     user = { id: result.meta.last_row_id };
   } catch (err) {
     return Response.json(
-      { success: false, error: 'Database error', message: err.message },
+      { success: false, error: '服务器内部错误' },
       { status: 500 },
     );
   }
@@ -85,7 +83,7 @@ export async function onRequest({ request, env }) {
     sessionHeaders = result.headers;
   } catch (err) {
     return Response.json(
-      { success: false, error: 'Database error (sessions)', message: err.message },
+      { success: false, error: '服务器内部错误' },
       { status: 500 },
     );
   }

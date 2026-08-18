@@ -29,15 +29,9 @@ export async function onRequest({ request, env }) {
   // 查询用户
   let user;
   try {
-    user = await env.cloud_lens_data
-      .prepare('SELECT * FROM users WHERE provider = ? AND provider_id = ?')
-      .bind('email', email)
-      .first();
+    user = await env.cloud_lens_data.prepare('SELECT * FROM users WHERE provider = ? AND provider_id = ?').bind('email', email).first();
   } catch (err) {
-    return Response.json(
-      { success: false, error: 'Database error', message: err.message },
-      { status: 500 },
-    );
+    return Response.json({ success: false, error: '服务器内部错误' }, { status: 500 });
   }
 
   if (!user) {
@@ -57,10 +51,7 @@ export async function onRequest({ request, env }) {
     const result = await createSession(env, user.id, url, remember !== false);
     sessionHeaders = result.headers;
   } catch (err) {
-    return Response.json(
-      { success: false, error: 'Database error (sessions)', message: err.message },
-      { status: 500 },
-    );
+    return Response.json({ success: false, error: '服务器内部错误' }, { status: 500 });
   }
 
   return Response.json({ success: true }, { headers: sessionHeaders });

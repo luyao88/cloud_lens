@@ -17,9 +17,6 @@
  */
 import { getUserFromRequest } from '../auth/_utils.js';
 
-// 与 functions/upload.js 一致的 Imgur 匿名 Client-ID
-const IMGUR_CLIENT_ID = 'd70305e7c3ac5c6';
-
 // 从路由参数解析图片ID，非法时返回 null
 const parseId = (params) => {
   const id = Number(params?.id);
@@ -47,12 +44,14 @@ export async function onRequestDelete({ request, env, params }) {
     return Response.json({ success: false, error: '图片不存在' }, { status: 404 });
   }
 
+  const clientId = env.IMGUR_CLIENT_ID || 'd70305e7c3ac5c6';
+
   // 尽力删除 Imgur 源文件（失败不阻塞，本地记录照常删除）
   if (image.delete_hash) {
     try {
       await fetch(`https://api.imgur.com/3/image/${image.delete_hash}`, {
         method: 'DELETE',
-        headers: { Authorization: `Client-ID ${IMGUR_CLIENT_ID}` },
+        headers: { Authorization: `Client-ID ${clientId}` },
       });
     } catch {}
   }

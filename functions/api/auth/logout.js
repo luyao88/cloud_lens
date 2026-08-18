@@ -20,10 +20,7 @@ export async function onRequest({ request, env }) {
   }
 
   const headers = new Headers();
-  headers.set(
-    'Set-Cookie',
-    `session=; Path=/; SameSite=Lax; Max-Age=0${secureFlag}`,
-  );
+  headers.set('Set-Cookie', `session=; Path=/; SameSite=Lax; Max-Age=0; HttpOnly${secureFlag}`);
   headers.set('Location', '/');
 
   return new Response(null, { status: 302, headers });

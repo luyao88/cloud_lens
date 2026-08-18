@@ -3,11 +3,11 @@
  *
  * 重置密码
  * POST body: { email, password, token }
- * token 是 verify-code（purpose='reset'）返回的临时 token
+ * token 是 verify-code（purpose='reset'）返回的带 HMAC 签名的临时 token
  *
  * 重置成功后不自动登录，返回 { success: true }，前端引导回登录页
  */
-import { hashPassword } from './_utils.js';
+import { hashPassword, verifySignedToken } from './_utils.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -26,11 +26,9 @@ export async function onRequest({ request, env }) {
     return Response.json({ success: false, error: '缺少参数' }, { status: 400 });
   }
 
-  // 验证 token
-  let tokenData;
-  try {
-    tokenData = JSON.parse(atob(token));
-  } catch {
+  // 验证带签名的 token
+  const tokenData = await verifySignedToken(token);
+  if (!tokenData) {
     return Response.json({ success: false, error: '无效的 token' }, { status: 400 });
   }
 
@@ -66,7 +64,7 @@ export async function onRequest({ request, env }) {
       .run();
   } catch (err) {
     return Response.json(
-      { success: false, error: 'Database error', message: err.message },
+      { success: false, error: '服务器内部错误' },
       { status: 500 },
     );
   }

@@ -10,20 +10,10 @@
   border-radius: 1.5rem;
   border: 2px dashed rgba(135, 231, 231, 0.3);
   background: var(--bg-card-light);
-  backdrop-filter: blur(12px);
   overflow: hidden;
   z-index: 1;
   cursor: pointer;
-  transition: all 0.3s ease;
-
-  // 悬浮置顶：上传成功后滚动时固定在页面顶部
-  &.sticky {
-    position: sticky;
-    top: 4.5rem;
-    z-index: 49;
-    border-radius: 0 0 1.5rem 1.5rem;
-    box-shadow: 0 4px 20px rgba(3, 182, 170, 0.15);
-  }
+  transition: border-color 0.3s ease, background 0.3s ease;
 
   &:hover {
     border-color: #03b6aa4f;
@@ -60,7 +50,7 @@
     width: 100%;
     height: max-content;
     pointer-events: none;
-    transition: all 0.3s ease;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
 
     .upload-icon-wrap {
       width: 3.5rem;
@@ -70,7 +60,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.3s ease;
+      transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
 
       svg {
         width: 1.75rem;

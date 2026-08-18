@@ -1,5 +1,5 @@
 <template>
-  <section class="Upload" :class="{ sticky: hasSuccessUpload }">
+  <section class="Upload">
     <input type="file" multiple @change="fileListChange" :accept="UploadConfig.AcceptTypes" />
     <div class="placeholder">
       <div class="upload-icon-wrap">
@@ -22,7 +22,7 @@ import { useToast } from '@/components/ui/toast/use-toast';
 import { useUploadManager } from '@/composables/useUploadManager';
 const { toast } = useToast();
 // 上传队列由全局管理器维护，切换页面不会中断
-const { items, addFiles, hasSuccessUpload } = useUploadManager();
+const { items, addFiles } = useUploadManager();
 // 参数
 const props = defineProps(['UploadConfig']);
 const UploadConfig = ref<any>(props.UploadConfig);

@@ -9,6 +9,13 @@
       <div class="header-right">
         <span class="desc">{{ props.desc }}</span>
         <ThemeToggle />
+        <button class="upload-btn" @click="uploadOpen = true" title="上传文件">
+          <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+            <path d="M12 12v9" />
+            <path d="m16 16-4-4-4 4" />
+          </svg>
+        </button>
         <a href="https://190223.xyz" target="_blank" title="Superma'Blog" class="social-link">
           <svg class="social-icon" viewBox="0 0 1024 1024" fill="currentColor">
             <path
@@ -48,13 +55,38 @@
       </div>
     </div>
     <!-- 登录弹窗 -->
-    <AuthDialog v-model:open="authOpen" @success="fetchUser" />
+    <AuthDialog v-model:open="authOpen" @success="fetchUser" @forgot="openForgot" />
+    <!-- 找回密码弹窗 -->
+    <ForgotPassword v-model:open="forgotOpen" />
+    <!-- 上传抽屉弹窗 -->
+    <Teleport to="body">
+      <Transition name="upload-drawer">
+        <aside v-if="uploadOpen" class="upload-drawer" @click.stop>
+          <div class="upload-drawer-header">
+            <span class="upload-drawer-title">上传文件</span>
+            <button class="upload-drawer-close" @click="uploadOpen = false" title="关闭">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="upload-drawer-body">
+            <Upload :UploadConfig="UploadConfig" />
+          </div>
+        </aside>
+      </Transition>
+      <Transition name="upload-drawer-mask">
+        <div v-if="uploadOpen" class="upload-drawer-mask" @click="uploadOpen = false"></div>
+      </Transition>
+    </Teleport>
   </header>
 </template>
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import ThemeToggle from '@/components/ThemeToggle/ThemeToggle.vue';
 import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
+import ForgotPassword from '@/components/ForgotPassword/ForgotPassword.vue';
+import Upload from '@/components/Upload/Upload.vue';
 
 const props = defineProps(['title', 'desc']);
 
@@ -62,6 +94,19 @@ const user = ref<{ username: string; avatar_url: string; email: string } | null>
 const showMenu = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
 const authOpen = ref(false);
+const forgotOpen = ref(false);
+const uploadOpen = ref(false);
+
+// 打开找回密码弹窗
+const openForgot = () => {
+  forgotOpen.value = true;
+};
+// 上传配置（与首页一致）
+const UploadConfig = ref<any>({
+  AcceptTypes: 'image/jpeg,image/png,image/gif,image/apng,image/tiff,image/bmp,image/webp,video/mp4,video/webm',
+  Max: 0,
+  MaxSize: 100,
+});
 
 // 获取当前登录用户
 const fetchUser = async () => {
@@ -179,11 +224,25 @@ onUnmounted(() => {
   font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s;
+  transition:
+    background-color 0.3s ease,
+    transform 0.3s ease,
+    box-shadow 0.3s ease,
+    letter-spacing 0.3s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
 }
 
 .login-btn:hover {
-  background: #2f363d;
+  background: #03b6aa;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(3, 182, 170, 0.4);
+  letter-spacing: 0.05em;
+}
+
+.login-btn:active {
+  transform: scale(0.97);
 }
 
 .login-icon {
@@ -314,26 +373,26 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2rem;
+  height: 2rem;
   border-radius: 50%;
   background: rgba(143, 143, 143, 0.15);
   color: var(--text-primary);
   transition:
     background-color 0.3s ease,
-    transform 0.3s ease,
+    transform 0.7s ease,
     color 0.3s ease;
 }
 
 .social-link:hover {
   background: #03b6aa;
   color: white;
-  transform: rotate(15deg);
+  transform: rotate(360deg);
 }
 
 .social-icon {
-  width: 2.4rem;
-  height: 2.4rem;
+  width: 1.9rem;
+  height: 1.9rem;
 }
 
 :global(html.dark) .social-link {
@@ -344,5 +403,146 @@ onUnmounted(() => {
 :global(html.dark) .social-link:hover {
   background: #03b6aa;
   color: white;
+}
+
+/* 上传按钮 */
+.upload-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgba(143, 143, 143, 0.15);
+  color: var(--text-primary);
+  border: none;
+  cursor: pointer;
+  transition:
+    background-color 0.3s ease,
+    transform 0.3s ease,
+    color 0.3s ease;
+}
+
+.upload-btn:hover {
+  background: #03b6aa;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.upload-btn:active {
+  transform: scale(0.97);
+}
+
+.upload-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+:global(html.dark) .upload-btn {
+  background: rgba(255, 255, 255, 0.15);
+  color: #f0f0f0;
+}
+
+:global(html.dark) .upload-btn:hover {
+  background: #03b6aa;
+  color: white;
+}
+
+/* 上传抽屉弹窗 */
+.upload-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 24rem;
+  max-width: 90vw;
+  background: var(--bg-card-solid, #fff);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.15);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+}
+
+:global(html.dark) .upload-drawer {
+  background: #1f2937;
+}
+
+.upload-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-base);
+  white-space: nowrap;
+}
+
+.upload-drawer-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.upload-drawer-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+.upload-drawer-close svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.upload-drawer-close:hover {
+  background: var(--bg-accent-light);
+  color: #03b6aa;
+}
+
+.upload-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 1.25rem;
+}
+
+.upload-drawer-body :deep(.Upload) {
+  margin: 1rem 0;
+}
+
+.upload-drawer-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 199;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+/* 抽屉滑入动画 */
+.upload-drawer-enter-active,
+.upload-drawer-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.upload-drawer-enter-from,
+.upload-drawer-leave-to {
+  transform: translateX(100%);
+}
+
+.upload-drawer-mask-enter-active,
+.upload-drawer-mask-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.upload-drawer-mask-enter-from,
+.upload-drawer-mask-leave-to {
+  opacity: 0;
 }
 </style>

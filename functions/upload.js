@@ -29,7 +29,7 @@ export async function onRequestOptions() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-export async function onRequestPost({ request }) {
+export async function onRequestPost({ request, env }) {
   // 仅处理 POST：GET /upload 由前端路由接管（Cloudflare Pages 自动 fallback 到 index.html）
   // 解析表单，取出文件
   let imgFile;
@@ -43,21 +43,20 @@ export async function onRequestPost({ request }) {
     return json({ success: false, error: '缺少 file 字段' }, 400);
   }
 
+  const clientId = env.IMGUR_CLIENT_ID || 'd70305e7c3ac5c6';
+
   // 转发到 Imgur（Client-ID 匿名上传）
   const body = new FormData();
   body.append('image', imgFile);
   try {
     const res = await fetch('https://api.imgur.com/3/upload', {
       method: 'POST',
-      headers: { Authorization: 'Client-ID d70305e7c3ac5c6' },
+      headers: { Authorization: `Client-ID ${clientId}` },
       body,
     });
     const data = await res.json().catch(() => null);
     if (!res.ok || !data?.data?.link) {
-      return json(
-        { success: false, error: data?.data?.error || `Imgur 上传失败（HTTP ${res.status}）` },
-        res.status >= 400 ? res.status : 502,
-      );
+      return json({ success: false, error: data?.data?.error || `Imgur 上传失败（HTTP ${res.status}）` }, res.status >= 400 ? res.status : 502);
     }
     return json(data);
   } catch {

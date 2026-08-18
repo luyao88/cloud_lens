@@ -7,35 +7,28 @@ const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void;
   (e: 'success'): void;
+  (e: 'forgot'): void;
 }>();
 
 const { toast } = useToast();
 
-/** step 状态：methods 方式选择 | email-login 登录 | email-register 注册 | email-verify 验证码 | email-forgot 忘记密码 */
-const step = ref<'methods' | 'email-login' | 'email-register' | 'email-verify' | 'email-forgot'>('methods');
-
-// 忘记密码子步骤：input 验证码输入 | reset 设置新密码
-const forgotStep = ref<'input' | 'reset'>('input');
+/** step 状态：methods 方式选择 | email-login 登录 | email-register 注册 | email-verify 验证码 */
+const step = ref<'methods' | 'email-login' | 'email-register' | 'email-verify'>('methods');
 
 // 表单数据
 const email = ref('');
 const password = ref('');
 const confirmPassword = ref('');
 const code = ref('');
+// 注册：默认勾选同意协议
+const agreedToTerms = ref(true);
 // 注册流程：验证通过后拿到的临时 token
 const verifyToken = ref('');
-// 忘记密码流程：验证通过后拿到的临时 token
-const resetToken = ref('');
-// 忘记密码：新密码
-const newPassword = ref('');
-const confirmNewPassword = ref('');
 // 记住我
 const rememberMe = ref(true);
 // 密码显示/隐藏
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
-const showNewPassword = ref(false);
-const showConfirmNewPassword = ref(false);
 // 重发验证码倒计时
 const countdown = ref(0);
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -54,8 +47,6 @@ const title = computed(() => {
       return '注册新账号';
     case 'email-verify':
       return '验证邮箱';
-    case 'email-forgot':
-      return forgotStep.value === 'reset' ? '设置新密码' : '重置密码';
     default:
       return '登录';
   }
@@ -71,8 +62,6 @@ const desc = computed(() => {
       return '输入邮箱和密码注册账号';
     case 'email-verify':
       return `验证码已发送至 ${email.value}`;
-    case 'email-forgot':
-      return forgotStep.value === 'reset' ? '请输入新密码' : `验证码已发送至 ${email.value}`;
     default:
       return '';
   }
@@ -84,20 +73,15 @@ watch(
   (val) => {
     if (val) {
       step.value = 'methods';
-      forgotStep.value = 'input';
       email.value = '';
       password.value = '';
       confirmPassword.value = '';
       code.value = '';
       verifyToken.value = '';
-      resetToken.value = '';
-      newPassword.value = '';
-      confirmNewPassword.value = '';
       rememberMe.value = true;
+      agreedToTerms.value = true;
       showPassword.value = false;
       showConfirmPassword.value = false;
-      showNewPassword.value = false;
-      showConfirmNewPassword.value = false;
       countdown.value = 0;
     }
   },
@@ -111,6 +95,10 @@ function loginWithOAuth(provider: 'github' | 'google' | 'gitee') {
 
 /** ============ 邮箱注册流程 ============ */
 async function startRegister() {
+  if (!agreedToTerms.value) {
+    toast({ title: '请先同意隐私协议和服务条款', variant: 'destructive' });
+    return;
+  }
   if (!email.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
     toast({ title: '邮箱格式不正确', variant: 'destructive' });
     return;
@@ -250,127 +238,16 @@ async function resendCode() {
   }
 }
 
-/** ============ 忘记密码流程 ============ */
-/** 进入忘记密码：先发一次验证码 */
-async function startForgot() {
-  if (!email.value) {
-    toast({ title: '请先填写邮箱', variant: 'destructive' });
-    return;
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
-    toast({ title: '邮箱格式不正确', variant: 'destructive' });
-    return;
-  }
-
-  submitting.value = true;
-  try {
-    const res = await fetch('/api/auth/send-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.value, purpose: 'reset' }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      toast({ title: '发送失败', description: data.error || '', variant: 'destructive' });
-      return;
-    }
-    step.value = 'email-forgot';
-    forgotStep.value = 'input';
-    code.value = '';
-    startCountdown();
-  } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
-  } finally {
-    submitting.value = false;
-  }
+/** ============ 忘记密码：交给父组件打开找回密码弹窗 ============ */
+function goForgotPassword() {
+  emit('update:open', false);
+  emit('forgot');
 }
 
-/** 校验忘记密码验证码 */
-async function verifyForgotCode() {
-  if (code.value.length !== 6) {
-    toast({ title: '请输入 6 位验证码', variant: 'destructive' });
-    return;
-  }
-
-  submitting.value = true;
-  try {
-    const res = await fetch('/api/auth/verify-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.value, code: code.value, purpose: 'reset' }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      toast({ title: '验证失败', description: data.error || '', variant: 'destructive' });
-      return;
-    }
-    resetToken.value = data.token;
-    forgotStep.value = 'reset';
-  } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
-  } finally {
-    submitting.value = false;
-  }
-}
-
-/** 重置密码 */
-async function doResetPassword() {
-  if (newPassword.value.length < 6) {
-    toast({ title: '密码至少 6 位', variant: 'destructive' });
-    return;
-  }
-  if (newPassword.value !== confirmNewPassword.value) {
-    toast({ title: '两次密码不一致', variant: 'destructive' });
-    return;
-  }
-
-  submitting.value = true;
-  try {
-    const res = await fetch('/api/auth/reset-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: email.value,
-        password: newPassword.value,
-        token: resetToken.value,
-      }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      toast({ title: '重置失败', description: data.error || '', variant: 'destructive' });
-      return;
-    }
-    toast({ title: '密码重置成功', description: '请使用新密码登录' });
-    // 清空密码相关字段，切回登录页
-    password.value = '';
-    newPassword.value = '';
-    confirmNewPassword.value = '';
-    code.value = '';
-    resetToken.value = '';
-    step.value = 'email-login';
-  } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
-  } finally {
-    submitting.value = false;
-  }
-}
-
-/** 重发忘记密码验证码 */
-async function resendForgotCode() {
-  if (countdown.value > 0) return;
-  const res = await fetch('/api/auth/send-code', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email.value, purpose: 'reset' }),
-  });
-  const data = await res.json();
-  if (data.success) {
-    startCountdown();
-    toast({ title: '验证码已重新发送' });
-  } else {
-    toast({ title: '发送失败', description: data.error || '', variant: 'destructive' });
-  }
-}
+/** 禁用点击遮罩和 ESC 关闭弹窗，仅保留 X 按钮 */
+const preventDismiss = (e: Event) => {
+  e.preventDefault();
+};
 
 /** 提交按钮（根据 step 分发） */
 async function handleSubmit() {
@@ -380,19 +257,13 @@ async function handleSubmit() {
     await verifyCode();
   } else if (step.value === 'email-login') {
     await doLogin();
-  } else if (step.value === 'email-forgot') {
-    if (forgotStep.value === 'input') {
-      await verifyForgotCode();
-    } else {
-      await doResetPassword();
-    }
   }
 }
 </script>
 
 <template>
   <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
-    <DialogContent class="max-w-md">
+    <DialogContent class="max-w-md" @escape-key-down="preventDismiss" @pointer-down-outside="preventDismiss" @interact-outside="preventDismiss">
       <div class="flex flex-col gap-1.5 mb-2 text-center">
         <DialogTitle>{{ title }}</DialogTitle>
         <DialogDescription>{{ desc }}</DialogDescription>
@@ -443,12 +314,12 @@ async function handleSubmit() {
       <form v-else-if="step === 'email-login' || step === 'email-register'" class="flex flex-col gap-3" @submit.prevent="handleSubmit">
         <label class="auth-field">
           <span class="auth-label">邮箱</span>
-          <input v-model="email" type="email" class="auth-input" placeholder="you@example.com" required />
+          <input v-model="email" type="email" class="auth-input" placeholder="请输入邮箱" required />
         </label>
         <label class="auth-field">
           <span class="auth-label">密码</span>
           <div class="password-wrap">
-            <input v-model="password" :type="showPassword ? 'text' : 'password'" autocomplete="current-password" class="auth-input" placeholder="至少 6 位" required />
+            <input v-model="password" :type="showPassword ? 'text' : 'password'" autocomplete="current-password" class="auth-input" placeholder="请输入密码" required />
             <button type="button" class="password-toggle" @click="showPassword = !showPassword">
               <svg v-if="!showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
@@ -488,10 +359,21 @@ async function handleSubmit() {
             <input type="checkbox" v-model="rememberMe" />
             <span>记住我</span>
           </label>
-          <a class="auth-link" @click="startForgot">忘记密码？</a>
+          <a class="auth-link" @click="goForgotPassword">忘记密码？</a>
         </div>
 
-        <button type="submit" class="auth-submit-btn" :disabled="submitting">
+        <!-- 注册：同意协议（默认勾选） -->
+        <label v-if="step === 'email-register'" class="auth-remember auth-terms">
+          <input type="checkbox" v-model="agreedToTerms" />
+          <span class="auth-terms-text">
+            我已阅读并同意
+            <router-link to="/legal?type=privacy" target="_blank" class="auth-link">《隐私协议》</router-link>
+            和
+            <router-link to="/legal?type=terms" target="_blank" class="auth-link">《服务条款》</router-link>
+          </span>
+        </label>
+
+        <button type="submit" class="auth-submit-btn" :disabled="submitting || (step === 'email-register' && !agreedToTerms)">
           {{ submitting ? '处理中...' : step === 'email-register' ? '注册' : '登录' }}
         </button>
 
@@ -526,74 +408,6 @@ async function handleSubmit() {
         </div>
 
         <a class="auth-switch mt-2" @click="step = 'methods'">返回其他登录方式</a>
-      </form>
-
-      <!-- step 5: 忘记密码 -->
-      <form v-else-if="step === 'email-forgot'" class="flex flex-col gap-3" @submit.prevent="handleSubmit">
-        <!-- 子步骤 1：输入验证码 -->
-        <template v-if="forgotStep === 'input'">
-          <p class="text-sm text-muted-foreground">已向 {{ email }} 发送 6 位验证码，请输入。</p>
-          <div class="auth-field">
-            <span class="auth-label">验证码</span>
-            <input v-model="code" type="text" maxlength="6" autocomplete="one-time-code" class="auth-input tracking-[0.5em] text-center" placeholder="------" required />
-          </div>
-
-          <button type="submit" class="auth-submit-btn" :disabled="submitting">
-            {{ submitting ? '处理中...' : '验证' }}
-          </button>
-
-          <div class="auth-switch">
-            没收到？
-            <a v-if="countdown > 0" class="auth-link-disabled">{{ countdown }}s 后可重发</a>
-            <a v-else class="auth-link" @click="resendForgotCode">重新发送</a>
-          </div>
-        </template>
-
-        <!-- 子步骤 2：设置新密码 -->
-        <template v-else>
-          <label class="auth-field">
-            <span class="auth-label">新密码</span>
-            <div class="password-wrap">
-              <input v-model="newPassword" :type="showNewPassword ? 'text' : 'password'" autocomplete="new-password" class="auth-input" placeholder="至少 6 位" required />
-              <button type="button" class="password-toggle" @click="showNewPassword = !showNewPassword">
-                <svg v-if="!showNewPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                  <line x1="2" x2="22" y1="2" y2="22" />
-                </svg>
-              </button>
-            </div>
-          </label>
-          <label class="auth-field">
-            <span class="auth-label">确认新密码</span>
-            <div class="password-wrap">
-              <input v-model="confirmNewPassword" :type="showConfirmNewPassword ? 'text' : 'password'" autocomplete="new-password" class="auth-input" placeholder="再次输入新密码" required />
-              <button type="button" class="password-toggle" @click="showConfirmNewPassword = !showConfirmNewPassword">
-                <svg v-if="!showConfirmNewPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                  <line x1="2" x2="22" y1="2" y2="22" />
-                </svg>
-              </button>
-            </div>
-          </label>
-
-          <button type="submit" class="auth-submit-btn" :disabled="submitting">
-            {{ submitting ? '处理中...' : '重置密码' }}
-          </button>
-        </template>
-
-        <a class="auth-switch mt-2" @click="step = 'email-login'">返回登录</a>
       </form>
     </DialogContent>
   </Dialog>
@@ -658,6 +472,21 @@ async function handleSubmit() {
   height: 1rem;
   accent-color: hsl(var(--primary));
   cursor: pointer;
+}
+
+/* 注册：同意协议（多行文本与 checkbox 顶部对齐） */
+.auth-terms {
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+.auth-terms input[type='checkbox'] {
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+.auth-terms-text {
+  flex: 1;
 }
 
 .auth-label {

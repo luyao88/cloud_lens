@@ -50,8 +50,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2rem;
+  height: 2rem;
   border-radius: 50%;
   background: rgba(115, 189, 183, 0.384);
   border: none;
@@ -59,19 +59,19 @@ onUnmounted(() => {
   color: #111111;
   transition:
     background-color 0.3s ease,
-    transform 0.3s ease,
+    transform 0.7s ease,
     color 0.3s ease;
 }
 
 .theme-toggle-btn:hover {
   background: #03b6aa;
   color: white;
-  transform: rotate(15deg);
+  transform: rotate(360deg);
 }
 
 .theme-icon {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 :global(html.dark) .theme-toggle-btn {

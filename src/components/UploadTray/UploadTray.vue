@@ -121,7 +121,7 @@
   </Transition>
 </template>
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, watchEffect } from 'vue';
 import { formatURL } from '@/utils/index';
 import { useToast } from '@/components/ui/toast/use-toast';
 import { useUploadManager, type UploadItem } from '@/composables/useUploadManager';
@@ -159,6 +159,12 @@ watch(expanded, (open) => {
 });
 
 const visible = computed(() => items.length > 0 && (hasActive.value || expanded.value || !dismissed.value));
+
+// 在 body 上标记托盘状态，供返回顶部按钮等右下角固定元素避让
+watchEffect(() => {
+  document.body.classList.toggle('has-upload-tray', visible.value);
+  document.body.classList.toggle('upload-tray-expanded', expanded.value && visible.value);
+});
 
 const summaryText = computed(() => {
   if (hasActive.value) return `${uploadingCount.value} 个上传中`;
