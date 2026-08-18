@@ -17,37 +17,33 @@
   </section>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useToast } from '@/components/ui/toast/use-toast';
+import { useUploadManager } from '@/composables/useUploadManager';
 const { toast } = useToast();
+// 上传队列由全局管理器维护，切换页面不会中断
+const { items, addFiles, hasSuccessUpload } = useUploadManager();
 // 参数
-const props = defineProps(['modelValue', 'UploadConfig', 'uploadAPI']);
-const emits = defineEmits(['update:modelValue']);
+const props = defineProps(['UploadConfig']);
 const UploadConfig = ref<any>(props.UploadConfig);
-// 是否有文件上传成功（用于悬浮置顶）
-const hasSuccessUpload = computed(() => props.modelValue?.some((f: any) => f.upload_status === 'success'));
-// 文件上传列表变化事件
-const fileListChange = async (v: Event, type: boolean = false) => {
-  let targetFileListArr: any = [];
+// 文件列表变化事件（选择 / 拖拽 / 粘贴）
+const fileListChange = async (v: Event | File[], type: boolean = false) => {
+  let targetFileListArr: any[] = [];
   if (!type) {
-    if (!v.target) return;
-    targetFileListArr = (v.target as HTMLInputElement).files || [];
+    if (!(v as Event).target) return;
+    targetFileListArr = Array.from(((v as Event).target as HTMLInputElement).files || []);
   } else {
-    targetFileListArr = v;
+    targetFileListArr = Array.from(v as File[]);
   }
+  if (!targetFileListArr.length) return;
   // 处理图片格式
   targetFileListArr = await imgTypeFormat(targetFileListArr);
   // 校验文件格式和大小
   const acceptTypes = UploadConfig.value.AcceptTypes.split(',').map((t: string) => t.trim());
   const maxSize = UploadConfig.value.MaxSize * 1024 * 1024;
-  const validFiles: any[] = [];
+  const validFiles: File[] = [];
   const rejectedFiles: string[] = [];
-  Array.from(targetFileListArr || []).forEach((file: any) => {
-    // 已上传的文件跳过校验
-    if (file.upload_status === 'success') {
-      validFiles.push(file);
-      return;
-    }
+  targetFileListArr.forEach((file: any) => {
     const isAccepted = acceptTypes.some((type: string) => {
       if (type.endsWith('/*')) return file.type.startsWith(type.slice(0, -1));
       return file.type === type;
@@ -65,14 +61,14 @@ const fileListChange = async (v: Event, type: boolean = false) => {
   if (rejectedFiles.length) {
     toast({ title: '文件被拒绝', description: rejectedFiles.join('、') });
   }
-  const FileListArr: Array<any> = [...props.modelValue, ...validFiles];
+  if (!validFiles.length) return;
   // 过滤超过数量的文件
-  if (UploadConfig.value.Max && FileListArr.length > UploadConfig.value.Max) {
+  let finalFiles = validFiles;
+  if (UploadConfig.value.Max && items.length + validFiles.length > UploadConfig.value.Max) {
+    finalFiles = validFiles.slice(0, Math.max(0, UploadConfig.value.Max - items.length));
     toast({ title: 'Tips', description: `已过滤超过最大上传 ${UploadConfig.value.Max}个 的文件` });
-    FileListArr.splice(UploadConfig.value.Max);
   }
-  emits('update:modelValue', FileListArr);
-  fileUpload(FileListArr);
+  if (finalFiles.length) addFiles(finalFiles);
 };
 
 // 图片格式webp 转换为png
@@ -104,90 +100,6 @@ const imgTypeFormat = async (files: File[]) => {
   return await Promise.all(_fileList.map(convertWebPToPNG));
 };
 
-// 上传
-const fileUpload = async (FileListArr: Array<any>) => {
-  FileListArr.forEach(async (i: any) => {
-    if (i.upload_status) return;
-    const formData = new FormData();
-    formData.append('file', i);
-    // 做预览blob======
-    if (i.type.startsWith('image/')) {
-      i.upload_blob = URL.createObjectURL(i);
-      i.upload_type = 'image';
-    } else if (i.type.startsWith('video/')) {
-      i.upload_blob = URL.createObjectURL(i);
-      i.upload_type = 'video';
-    }
-    // 做预览blob======
-    // 同步上传状态======
-    i.upload_status = 'uploading';
-    i.upload_progress = 96;
-    emits('update:modelValue', [...FileListArr]);
-    // 同步上传状态======
-    try {
-      // 发送请求
-      const res = await fetch(props.uploadAPI, {
-        method: 'POST',
-        body: formData,
-      });
-      // 网关错误（如 Cloudflare 413/502）返回的是 HTML 页面，res.json() 会抛错，这里容错解析
-      let result: any = null;
-      try {
-        result = await res.json();
-      } catch {
-        result = null;
-      }
-      i.upload_result = result;
-      i.upload_result._vh_filename = i.name;
-      // 校验上传结果：HTTP 状态异常或未返回图片链接均视为失败，不再调用保存接口
-      if (!res.ok || !result?.data?.link) {
-        i.upload_status = 'error';
-        const desc =
-          result?.error ||
-          (res.status === 413
-            ? '文件过大，超过 100MB 上传上限'
-            : result
-              ? `HTTP ${res.status}`
-              : `服务异常（HTTP ${res.status}）`);
-        toast({ title: '上传失败', description: desc, variant: 'destructive' });
-        return;
-      }
-      i.upload_status = 'success';
-      // 上传成功后保存到服务器（需要登录，未登录静默跳过，不影响上传结果）
-      saveImage(result, i.name, i.size);
-    } catch (error) {
-      i.upload_status = 'error';
-      i.upload_result = error;
-      toast({ title: '上传失败', description: (error as Error)?.message || '网络异常', variant: 'destructive' });
-    } finally {
-      // 同步上传状态======
-      i.upload_progress = 100;
-      emits('update:modelValue', [...FileListArr]);
-      // 同步上传状态======
-    }
-  });
-};
-
-// 保存上传成功的图片信息到服务器（需要登录，未登录/失败均静默处理）
-const saveImage = (result: any, filename: string, size: number) => {
-  // 防御：没有拿到 Imgur 链接时不保存
-  if (!result?.data?.link) return;
-  fetch('/api/images', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      imgur_id: result?.data?.id,
-      imgur_url: result?.data?.link,
-      delete_hash: result?.data?.deletehash,
-      filename,
-      size,
-      tags: '',
-    }),
-  }).catch(() => {
-    // 保存失败不影响上传结果
-  });
-};
-
 // 粘贴上传
 const pasteUpload = (v: any) => {
   v.preventDefault();
@@ -198,6 +110,9 @@ const pasteUpload = (v: any) => {
 
 onMounted(() => {
   document.addEventListener('paste', pasteUpload);
+});
+onUnmounted(() => {
+  document.removeEventListener('paste', pasteUpload);
 });
 </script>
 

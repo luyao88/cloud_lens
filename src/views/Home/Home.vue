@@ -26,21 +26,21 @@
     </div>
 
     <!-- 上传区域 -->
-    <Upload v-model="fileList" :UploadConfig="UploadConfig" :uploadAPI="uploadAPI" />
+    <Upload :UploadConfig="UploadConfig" />
 
     <!-- 工具栏 -->
-    <section v-show="fileList.length" class="toolbar">
+    <section v-show="items.length" class="toolbar">
       <div class="toolbar-left">
         <span class="file-count"
-          >已上传 <strong>{{ fileList.filter((i: any) => i.upload_status === 'success').length }}</strong> / {{ fileList.length }} 个文件</span
+          >已上传 <strong>{{ items.filter((i: any) => i.upload_status === 'success').length }}</strong> / {{ items.length }} 个文件</span
         >
       </div>
       <div class="toolbar-right">
-        <button class="btn-ghost" @click="fileList = []">
+        <button class="btn-ghost" @click="setItems([])">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
           清空
         </button>
-        <button class="btn-ghost" @click="vh.CopyText(fileList.map((i: any) => i.upload_blob).join('\n'))">
+        <button class="btn-ghost" @click="vh.CopyText(items.map((i: any) => i.upload_blob).join('\n'))">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect width="14" height="14" x="8" y="8" rx="2" />
             <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
@@ -51,7 +51,7 @@
     </section>
 
     <!-- 文件列表 -->
-    <ResList v-model="fileList" :nodeHost="nodeHost" />
+    <ResList :modelValue="items" @update:modelValue="setItems" :nodeHost="nodeHost" />
 
     <!-- 特性区域 -->
     <div class="features">
@@ -103,34 +103,17 @@
 </template>
 <script setup lang="ts">
 import vh from 'vh-plugin';
-import { ref, watch, onMounted, onUnmounted } from 'vue';
-import { formatURL } from '@/utils/index';
+import { ref, onMounted, onUnmounted } from 'vue';
 import Upload from '@/components/Upload/Upload.vue';
 import ResList from '@/components/ResList/ResList.vue';
-// IPFS节点
-const nodeHost = ref<string>(import.meta.env.VITE_IMG_API_URL || location.origin);
-// 上传接口
-const uploadAPI = ref<string>(`${import.meta.env.VITE_IMG_API_URL || location.origin}/upload`);
+import { useUploadManager } from '@/composables/useUploadManager';
+// 上传队列由全局管理器维护：切页不中断，进度在右下角悬浮托盘展示
+const { items, setItems, nodeHost } = useUploadManager();
 // 上传配置
 const UploadConfig = ref<any>({
   AcceptTypes: 'image/jpeg,image/png,image/gif,image/apng,image/tiff,image/bmp,image/webp,video/mp4,video/webm', // Imgur匿名上传实际支持的格式（MOV/AVI/MKV会被Imgur拒绝）
   Max: 0, //多选个数，0为不限制
   MaxSize: 100, //单个文件大小限制，单位：MB（Cloudflare 免费版请求体上限 100MB，超过会被 413 拒绝）
-});
-// 上传列表
-const fileList = ref<Array<any>>(JSON.parse(localStorage.getItem('zychUpImageList') || '[]'));
-watch(fileList, (newVal) => {
-  localStorage.setItem(
-    'zychUpImageList',
-    JSON.stringify(
-      newVal
-        .filter((i: any) => i.upload_status == 'success')
-        .map((i: any) => {
-          i.upload_blob = formatURL({ nodeHost: nodeHost.value }, i.upload_result);
-          return i;
-        }),
-    ),
-  );
 });
 
 // 返回顶部
