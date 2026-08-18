@@ -14,7 +14,8 @@
  *   图片：JPEG, PNG, GIF, APNG, TIFF, BMP, WebP（上限 20MB）
  *   视频：MP4, WebM, AVI, MOV, MKV, FLV, WMV, MPEG（上限 200MB）
  */
-export async function onRequest({ request }) {
+export async function onRequestPost({ request }) {
+  // 仅处理 POST：GET /upload 由前端路由接管（Cloudflare Pages 自动 fallback 到 index.html）
   // 解析表单，取出文件
   let imgFile;
   try {

@@ -50,7 +50,13 @@
       <!-- 相册详情视图 -->
       <div v-if="activeAlbum" class="album-detail">
         <div class="detail-head">
-          <button class="back-btn" @click="activeKey = ''">
+          <button
+            class="back-btn"
+            @click="
+              exitBatchMode();
+              activeKey = '';
+            "
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="m15 18-6-6 6-6" />
             </svg>
@@ -60,18 +66,37 @@
             <h2>{{ activeAlbum.name }}</h2>
             <span>{{ activeAlbum.images.length }} 个文件 · {{ formatSize(albumSize(activeAlbum)) }}</span>
           </div>
+          <div class="detail-actions">
+            <template v-if="batchMode">
+              <button class="btn ghost" @click="toggleSelectAll">
+                {{ isAllSelected ? '取消全选' : '全选' }}
+              </button>
+              <button class="btn primary" :disabled="!selectedIds.size || batchSaving" @click="openBatchDialog">
+                {{ batchSaving ? '保存中...' : `批量编辑标签 (${selectedIds.size})` }}
+              </button>
+              <button class="btn ghost" @click="exitBatchMode">退出</button>
+            </template>
+            <template v-else>
+              <button class="btn ghost" :disabled="!activeAlbum.images.length" @click="enterBatchMode">批量编辑标签</button>
+            </template>
+          </div>
         </div>
 
-        <div v-if="activeAlbum.images.length" class="image-grid">
-          <div class="image-card" v-for="img in activeAlbum.images" :key="img.id">
-            <div class="thumb-wrap" @click="openPreview(img)">
+        <div v-if="activeAlbum.images.length" class="image-grid" :class="{ 'batch-mode': batchMode }">
+          <div class="image-card" :class="{ selected: selectedIds.has(img.id) }" v-for="img in activeAlbum.images" :key="img.id">
+            <div class="thumb-wrap" @click="batchMode ? toggleSelect(img) : openPreview(img)">
               <video v-if="isVideo(img)" class="thumb" :src="fileUrl(img)" muted preload="metadata" playsinline></video>
               <img v-else class="thumb" :src="fileUrl(img)" loading="lazy" :alt="img.filename || ''" />
               <span v-if="isVideo(img)" class="video-badge">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                 视频
               </span>
-              <div class="thumb-actions" @click.stop>
+              <div v-if="batchMode" class="select-checkbox" :class="{ checked: selectedIds.has(img.id) }" @click.stop>
+                <svg v-if="selectedIds.has(img.id)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+              <div v-else class="thumb-actions" @click.stop>
                 <button class="action-btn" title="复制链接" @click="copyLink(img)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
@@ -151,6 +176,21 @@
         <div class="dialog-footer">
           <button class="btn ghost" @click="tagOpen = false">取消</button>
           <button class="btn primary" :disabled="savingTag" @click="saveTags">{{ savingTag ? '保存中...' : '保存' }}</button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 批量编辑标签弹窗 -->
+    <Dialog :open="batchDialogOpen" @update:open="(v: boolean) => (batchDialogOpen = v)">
+      <DialogContent class="max-w-md">
+        <div class="flex flex-col gap-1.5 text-center">
+          <DialogTitle>批量编辑标签</DialogTitle>
+          <DialogDescription> 将替换 {{ selectedIds.size }} 张图片的标签，多个标签用英文逗号分隔；留空表示清空所有标签。 </DialogDescription>
+        </div>
+        <input v-model="batchTagInput" class="dialog-input" type="text" placeholder="例如：风景, 旅行" @keyup.enter="saveBatchTags" />
+        <div class="dialog-footer">
+          <button class="btn ghost" @click="batchDialogOpen = false">取消</button>
+          <button class="btn primary" :disabled="batchSaving" @click="saveBatchTags">{{ batchSaving ? '保存中...' : '保存' }}</button>
         </div>
       </DialogContent>
     </Dialog>
@@ -408,6 +448,104 @@ const saveTags = async () => {
     toast({ title: '保存失败', description: '网络错误，请稍后重试', variant: 'destructive' });
   } finally {
     savingTag.value = false;
+  }
+};
+
+// ===== 批量编辑标签 =====
+const batchMode = ref(false);
+const selectedIds = ref<Set<number>>(new Set());
+const batchDialogOpen = ref(false);
+const batchTagInput = ref('');
+const batchSaving = ref(false);
+
+const currentAlbumIds = computed(() => new Set(activeAlbum.value?.images.map((i) => i.id) || []));
+const isAllSelected = computed(() => currentAlbumIds.value.size > 0 && selectedIds.value.size === currentAlbumIds.value.size);
+
+const enterBatchMode = () => {
+  batchMode.value = true;
+  selectedIds.value = new Set();
+};
+
+const exitBatchMode = () => {
+  batchMode.value = false;
+  selectedIds.value = new Set();
+};
+
+const toggleSelect = (img: ImageRecord) => {
+  const next = new Set(selectedIds.value);
+  if (next.has(img.id)) next.delete(img.id);
+  else next.add(img.id);
+  selectedIds.value = next;
+};
+
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedIds.value = new Set();
+  } else {
+    selectedIds.value = new Set(currentAlbumIds.value);
+  }
+};
+
+const openBatchDialog = () => {
+  if (!selectedIds.value.size) return;
+  batchTagInput.value = '';
+  batchDialogOpen.value = true;
+};
+
+const saveBatchTags = async () => {
+  if (!selectedIds.value.size || batchSaving.value) return;
+  batchSaving.value = true;
+  try {
+    const res = await fetch('/api/images/batch-tags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [...selectedIds.value], tags: batchTagInput.value }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      toast({ title: '保存失败', description: data.error, variant: 'destructive' });
+      return;
+    }
+    // 本地更新已修改图片的 tags
+    const tagStr = batchTagInput.value.trim();
+    for (const id of selectedIds.value) {
+      const idx = images.value.findIndex((i) => i.id === id);
+      if (idx > -1) {
+        images.value[idx] = { ...images.value[idx], tags: tagStr || null };
+      }
+    }
+    // 标签模式下，如果当前相册的图片被清空了标签或标签变了，回退到相册列表
+    if (groupMode.value === 'tag' && activeAlbum.value) {
+      const albumKey = activeAlbum.value.key;
+      const remaining = activeAlbum.value.images.filter((img) => {
+        if (!selectedIds.value.has(img.id)) return true;
+        const newTags = tagStr
+          .split(/[,，]/)
+          .map((t) => t.trim())
+          .filter(Boolean);
+        if (albumKey === UNTAGGED_KEY) return newTags.length === 0;
+        return newTags.includes(albumKey);
+      });
+      const removedCount = activeAlbum.value.images.length - remaining.length;
+      if (!remaining.length) {
+        activeKey.value = '';
+      } else if (removedCount > 0) {
+        toast({
+          title: 'Tips',
+          description: `已更新 ${data.updated} 张图片的标签，${removedCount} 张已移至其他相册`,
+        });
+        batchDialogOpen.value = false;
+        exitBatchMode();
+        return;
+      }
+    }
+    batchDialogOpen.value = false;
+    toast({ title: 'Tips', description: `已更新 ${data.updated} 张图片的标签` });
+    exitBatchMode();
+  } catch {
+    toast({ title: '保存失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+  } finally {
+    batchSaving.value = false;
   }
 };
 

@@ -47,7 +47,7 @@
           <span class="label-text">当前时间</span>
           <span class="label-value">{{ formatTime(currentTime) }} / {{ formatTime(videoDuration) }}</span>
         </div>
-        <input type="range" min="0" :max="videoDuration" step="0.01" :value="currentTime" @input="seekTo" />
+        <input type="range" min="0" :max="videoDuration" step="0.01" :value="currentTime" :style="{ '--fill': fillPercent(currentTime, 0, videoDuration) }" @input="seekTo" />
       </div>
 
       <!-- GIF 起止时间 -->
@@ -57,14 +57,14 @@
             <span class="label-text">起始时间</span>
             <span class="label-value">{{ formatTime(startTime) }}</span>
           </div>
-          <input type="range" min="0" :max="videoDuration" step="0.1" v-model.number="startTime" />
+          <input type="range" min="0" :max="videoDuration" step="0.1" v-model.number="startTime" :style="{ '--fill': fillPercent(startTime, 0, videoDuration) }" />
         </div>
         <div class="timeline-row">
           <div class="timeline-label">
             <span class="label-text">结束时间</span>
             <span class="label-value">{{ formatTime(endTime) }} ({{ (endTime - startTime).toFixed(1) }}s)</span>
           </div>
-          <input type="range" :min="startTime" :max="videoDuration" step="0.1" v-model.number="endTime" />
+          <input type="range" :min="startTime" :max="videoDuration" step="0.1" v-model.number="endTime" :style="{ '--fill': fillPercent(endTime, startTime, videoDuration) }" />
         </div>
       </template>
     </div>
@@ -100,7 +100,7 @@
             <span class="label-text">帧率 FPS</span>
             <span class="label-value">{{ fps }} fps</span>
           </div>
-          <input type="range" min="5" max="15" step="1" v-model.number="fps" />
+          <input type="range" min="5" max="15" step="1" v-model.number="fps" :style="{ '--fill': fillPercent(fps, 5, 15) }" />
         </div>
 
         <!-- 最大宽度 -->
@@ -109,7 +109,7 @@
             <span class="label-text">最大宽度</span>
             <span class="label-value">{{ maxWidth }}px</span>
           </div>
-          <input type="range" min="120" max="1280" step="20" v-model.number="maxWidth" />
+          <input type="range" min="120" max="1280" step="20" v-model.number="maxWidth" :style="{ '--fill': fillPercent(maxWidth, 120, 1280) }" />
         </div>
 
         <!-- 质量 -->
@@ -118,7 +118,7 @@
             <span class="label-text">图片质量</span>
             <span class="label-value">{{ Math.round(quality * 100) }}%</span>
           </div>
-          <input type="range" min="0.1" max="1" step="0.05" v-model.number="quality" />
+          <input type="range" min="0.1" max="1" step="0.05" v-model.number="quality" :style="{ '--fill': fillPercent(quality, 0.1, 1) }" />
         </div>
       </div>
     </div>
@@ -428,6 +428,12 @@ const formatTime = (s: number) => {
   const min = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${min}:${sec.toString().padStart(2, '0')}`;
+};
+
+// 计算滑块已填充百分比（驱动轨道左侧填充色）
+const fillPercent = (val: number, min: number, max: number) => {
+  const pct = max > min ? ((val - min) / (max - min)) * 100 : 0;
+  return `${Math.min(100, Math.max(0, pct))}%`;
 };
 
 onUnmounted(() => {
