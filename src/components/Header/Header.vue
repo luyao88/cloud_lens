@@ -26,6 +26,9 @@
           <div v-else class="user-avatar user-avatar-default">
             {{ (user.username || '?')[0].toUpperCase() }}
           </div>
+          <Teleport to="body">
+            <div v-if="showMenu" class="dropdown-backdrop" @click="showMenu = false"></div>
+          </Teleport>
           <div v-if="showMenu" class="dropdown-menu" @click.stop>
             <div class="dropdown-header">
               <img v-if="user.avatar_url" :src="user.avatar_url" class="dropdown-avatar" />
@@ -225,12 +228,24 @@ onUnmounted(() => {
   right: 0;
   min-width: 16rem;
   max-width: 20rem;
-  background: var(--bg-card);
+  background: var(--bg-card-solid, #fff);
   border: 1px solid var(--border-base);
   border-radius: 0.5rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
   padding: 0.5rem 0;
   z-index: 100;
+}
+
+:global(html.dark) .dropdown-menu {
+  background: #1f2937;
+}
+
+/* 全屏遮罩：菜单打开时拦截底部点击（z-index 低于 header 的 50，避免遮挡头像点击） */
+.dropdown-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  background: transparent;
 }
 
 .dropdown-header {
