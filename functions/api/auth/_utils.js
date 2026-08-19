@@ -84,28 +84,129 @@ export async function getUserFromRequest(request, env) {
 }
 
 /**
- * 查找或创建用户（第三方登录通用）
+ * 查找或创建用户（支持多登录方式关联）
+ *
+ * 查找逻辑：
+ * 1. 先按 (provider, provider_id) 在 user_auth_methods 中精确查找
+ * 2. 如果没找到且 email 不为空，尝试按 email 关联到已有用户（实现账号合并）
+ * 3. 都没找到则创建新用户 + 写入 user_auth_methods
  */
 export async function findOrCreateUser(env, provider, providerId, email, username, avatarUrl) {
-  let user = await env.cloud_lens_data.prepare('SELECT * FROM users WHERE provider = ? AND provider_id = ?').bind(provider, String(providerId)).first();
+  // 1. 精确查找该登录方式
+  let authMethod = await env.cloud_lens_data
+    .prepare(
+      `SELECT m.*, u.id AS user_id, u.username, u.avatar_url, u.email
+       FROM user_auth_methods m
+       JOIN users u ON u.id = m.user_id
+       WHERE m.provider = ? AND m.provider_id = ?`,
+    )
+    .bind(provider, String(providerId))
+    .first();
 
-  if (!user) {
-    const result = await env.cloud_lens_data
-      .prepare(
-        `INSERT INTO users (provider, provider_id, email, username, avatar_url)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .bind(provider, String(providerId), email, username, avatarUrl)
-      .run();
-
-    user = {
-      id: result.meta.last_row_id,
-      username,
-      avatar_url: avatarUrl,
+  if (authMethod) {
+    return {
+      id: authMethod.user_id,
+      username: authMethod.username,
+      avatar_url: authMethod.avatar_url,
+      email: authMethod.email,
     };
   }
 
-  return user;
+  // 2. 如果有 email，尝试按 email 关联到已有用户
+  if (email) {
+    const existingUser = await env.cloud_lens_data
+      .prepare('SELECT id, username, avatar_url, email FROM users WHERE email = ?')
+      .bind(email)
+      .first();
+
+    if (existingUser) {
+      // 关联新登录方式到已有用户（不更新 users 表的 provider）
+      await env.cloud_lens_data
+        .prepare(
+          `INSERT INTO user_auth_methods (user_id, provider, provider_id, email)
+           VALUES (?, ?, ?, ?)`,
+        )
+        .bind(existingUser.id, provider, String(providerId), email)
+        .run();
+
+      // 更新 users 表的 avatar/username（如果 OAuth 有新信息）
+      if (avatarUrl && !existingUser.avatar_url) {
+        await env.cloud_lens_data
+          .prepare('UPDATE users SET avatar_url = ? WHERE id = ?')
+          .bind(avatarUrl, existingUser.id)
+          .run();
+        existingUser.avatar_url = avatarUrl;
+      }
+
+      return existingUser;
+    }
+  }
+
+  // 3. 创建新用户 + 登录方式记录
+  const result = await env.cloud_lens_data
+    .prepare(
+      `INSERT INTO users (provider, provider_id, email, username, avatar_url)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .bind(provider, String(providerId), email, username, avatarUrl)
+    .run();
+
+  const userId = result.meta.last_row_id;
+
+  await env.cloud_lens_data
+    .prepare(
+      `INSERT INTO user_auth_methods (user_id, provider, provider_id, email)
+       VALUES (?, ?, ?, ?)`,
+    )
+    .bind(userId, provider, String(providerId), email)
+    .run();
+
+  return {
+    id: userId,
+    username,
+    avatar_url: avatarUrl,
+    email,
+  };
+}
+
+/**
+ * 获取用户已绑定的所有登录方式
+ */
+export async function getUserAuthMethods(env, userId) {
+  const methods = await env.cloud_lens_data
+    .prepare(
+      `SELECT provider, provider_id, email FROM user_auth_methods WHERE user_id = ? ORDER BY created_at`,
+    )
+    .bind(userId)
+    .all();
+
+  return methods.results || [];
+}
+
+/**
+ * 绑定新登录方式到已有用户
+ * @returns {Promise<{ success: boolean, error?: string }>}
+ */
+export async function bindAuthMethod(env, userId, provider, providerId, email = null, passwordHash = null) {
+  // 检查该方式是否已被绑定
+  const existing = await env.cloud_lens_data
+    .prepare('SELECT user_id FROM user_auth_methods WHERE provider = ? AND provider_id = ?')
+    .bind(provider, String(providerId))
+    .first();
+
+  if (existing) {
+    return { success: false, error: '该登录方式已被绑定' };
+  }
+
+  await env.cloud_lens_data
+    .prepare(
+      `INSERT INTO user_auth_methods (user_id, provider, provider_id, email, password_hash)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .bind(userId, provider, String(providerId), email, passwordHash)
+    .run();
+
+  return { success: true };
 }
 
 /**
@@ -192,7 +293,8 @@ const TOKEN_SIGN_KEY = 'cloud_lens_verify_token_signing_key_v1';
 
 async function hmacSign(key, message) {
   const enc = new TextEncoder();
-  const cryptoKey = await crypto.subtle.importKey('raw', enc.encode(key), 'HMAC', false, ['sign']);
+  const keyData = enc.encode(key);
+  const cryptoKey = await crypto.subtle.importKey('raw', keyData, 'HMAC', false, ['sign']);
   const sig = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(message));
   return bufferToBase64(sig);
 }
@@ -210,9 +312,14 @@ async function hmacVerify(key, message, signature) {
  * @returns {Promise<string>} 签名后的 token
  */
 export async function signedToken(payload) {
-  const body = btoa(JSON.stringify(payload));
-  const sig = await hmacSign(TOKEN_SIGN_KEY, body);
-  return `${body}.${sig}`;
+  try {
+    const body = btoa(JSON.stringify(payload));
+    const sig = await hmacSign(TOKEN_SIGN_KEY, body);
+    return `${body}.${sig}`;
+  } catch (err) {
+    console.error('[signedToken] failed:', err, 'payload:', payload);
+    throw err;
+  }
 }
 
 /**

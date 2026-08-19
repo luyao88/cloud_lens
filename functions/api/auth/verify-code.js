@@ -56,10 +56,7 @@ export async function onRequest({ request, env }) {
 
   // 标记为已使用
   try {
-    await env.cloud_lens_data
-      .prepare('UPDATE verification_codes SET used = 1 WHERE id = ?')
-      .bind(record.id)
-      .run();
+    await env.cloud_lens_data.prepare('UPDATE verification_codes SET used = 1 WHERE id = ?').bind(record.id).run();
   } catch (err) {
     return Response.json({ success: false, error: '服务器内部错误' }, { status: 500 });
   }
@@ -70,7 +67,13 @@ export async function onRequest({ request, env }) {
     purpose: record.purpose,
     exp: Date.now() + 10 * 60 * 1000,
   };
-  const token = await signedToken(tokenData);
+  let token;
+  try {
+    token = await signedToken(tokenData);
+  } catch (err) {
+    console.error('[verify-code] signedToken failed:', err);
+    return Response.json({ success: false, error: 'Token 生成失败，请重试' }, { status: 500 });
+  }
 
   return Response.json({ success: true, token });
 }

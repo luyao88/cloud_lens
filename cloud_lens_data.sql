@@ -27,6 +27,25 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 
 -- ======================
+-- 用户登录方式关联表（一个用户可绑定多种登录方式）
+-- ======================
+CREATE TABLE IF NOT EXISTS user_auth_methods (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  provider TEXT NOT NULL,               -- 'email' | 'github' | 'google' | 'gitee'
+  provider_id TEXT NOT NULL,            -- 邮箱地址或第三方唯一ID
+  email TEXT,                           -- 该登录方式关联的邮箱（可空）
+  password_hash TEXT,                   -- 仅 provider='email' 时有值
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(provider, provider_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_methods_user ON user_auth_methods(user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_methods_email ON user_auth_methods(email);
+
+
+-- ======================
 -- 图片表
 -- ======================
 CREATE TABLE IF NOT EXISTS images (

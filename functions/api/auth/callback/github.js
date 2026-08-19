@@ -101,29 +101,18 @@ export async function onRequest({ request, env }) {
     } catch {}
   }
 
-  // 4. 查找或创建用户
+  // 4. 查找或创建用户（支持邮箱关联合并）
   let user;
   try {
-    user = await env.cloud_lens_data
-      .prepare('SELECT * FROM users WHERE provider = ? AND provider_id = ?')
-      .bind('github', String(githubUser.id))
-      .first();
-
-    if (!user) {
-      const result = await env.cloud_lens_data
-        .prepare(
-          `INSERT INTO users (provider, provider_id, email, username, avatar_url)
-           VALUES (?, ?, ?, ?, ?)`,
-        )
-        .bind('github', String(githubUser.id), email, githubUser.login, githubUser.avatar_url)
-        .run();
-
-      user = {
-        id: result.meta.last_row_id,
-        username: githubUser.login,
-        avatar_url: githubUser.avatar_url,
-      };
-    }
+    const { findOrCreateUser } = await import('../_utils.js');
+    user = await findOrCreateUser(
+      env,
+      'github',
+      String(githubUser.id),
+      email,
+      githubUser.login,
+      githubUser.avatar_url,
+    );
   } catch (err) {
     return new Response(
       JSON.stringify({ error: 'Database error (users)', message: err.message }),

@@ -26,10 +26,23 @@ export async function onRequest({ request, env }) {
     return Response.json({ success: false, error: '缺少参数' }, { status: 400 });
   }
 
-  // 查询用户
+  // 查询用户（优先从 user_auth_methods 查，回退到 users 表）
   let user;
   try {
-    user = await env.cloud_lens_data.prepare('SELECT * FROM users WHERE provider = ? AND provider_id = ?').bind('email', email).first();
+    user = await env.cloud_lens_data
+      .prepare(
+        `SELECT u.id, u.username, u.avatar_url, u.email, m.password_hash
+         FROM user_auth_methods m
+         JOIN users u ON u.id = m.user_id
+         WHERE m.provider = ? AND m.provider_id = ?`,
+      )
+      .bind('email', email)
+      .first();
+
+    // 回退：旧用户可能还没有 user_auth_methods 记录
+    if (!user) {
+      user = await env.cloud_lens_data.prepare('SELECT * FROM users WHERE provider = ? AND provider_id = ?').bind('email', email).first();
+    }
   } catch (err) {
     return Response.json({ success: false, error: '服务器内部错误' }, { status: 500 });
   }
@@ -38,8 +51,13 @@ export async function onRequest({ request, env }) {
     return Response.json({ success: false, error: '邮箱或密码错误' }, { status: 400 });
   }
 
-  // 验证密码
-  const valid = await verifyPassword(password, user.password_hash);
+  // 验证密码（password_hash 可能在 user_auth_methods 或 users 表中）
+  const passwordHash = user.password_hash;
+  if (!passwordHash) {
+    return Response.json({ success: false, error: '该账号未设置密码，请使用第三方登录' }, { status: 400 });
+  }
+
+  const valid = await verifyPassword(password, passwordHash);
   if (!valid) {
     return Response.json({ success: false, error: '邮箱或密码错误' }, { status: 400 });
   }

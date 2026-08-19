@@ -145,6 +145,43 @@
   word-break: break-all;
 }
 
+.auth-methods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+.auth-method-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #03b6aa;
+  background: rgba(3, 182, 170, 0.1);
+  border-radius: 0.375rem;
+}
+
+.bind-email-btn {
+  margin-top: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #03b6aa;
+  background: transparent;
+  border: 1px solid rgba(3, 182, 170, 0.3);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+  align-self: flex-start;
+}
+
+.bind-email-btn:hover {
+  background: rgba(3, 182, 170, 0.08);
+  border-color: rgba(3, 182, 170, 0.5);
+}
+
 .profile-stats {
   display: flex;
   align-items: center;
@@ -716,4 +753,66 @@
     margin-left: 0;
     width: 100%;
   }
+}
+
+// 绑定邮箱弹窗表单
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.auth-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.auth-input {
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  background: var(--bg-field, #fff);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 0.5rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.auth-input:focus {
+  border-color: #03b6aa;
+}
+
+:global(html.dark) .auth-input {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+
+.auth-submit-btn {
+  height: 2.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #03b6aa, #0d9488);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.auth-submit-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.auth-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-link {
+  font-size: 0.8rem;
+  color: #03b6aa;
+  cursor: pointer;
+  text-decoration: underline;
 }

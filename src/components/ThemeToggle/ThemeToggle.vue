@@ -64,7 +64,7 @@ onUnmounted(() => {
 }
 
 .theme-toggle-btn:hover {
-  background: #03b6aa;
+  background: #028a82;
   color: white;
   transform: rotate(360deg);
 }
@@ -74,13 +74,13 @@ onUnmounted(() => {
   height: 1.1rem;
 }
 
-:global(html.dark) .theme-toggle-btn {
-  background: rgba(255, 255, 255, 0.15);
-  color: #ff0000;
+:global(html.dark .theme-toggle-btn) {
+  background: rgba(3, 182, 170, 0.3);
+  color: #fff !important;
 }
 
-:global(html.dark) .theme-toggle-btn:hover {
-  background: #03b6aa;
-  color: white;
+:global(html.dark .theme-toggle-btn:hover) {
+  background: #028a82;
+  color: #111111 !important;
 }
 </style>

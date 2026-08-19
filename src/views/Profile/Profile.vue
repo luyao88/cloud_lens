@@ -27,6 +27,10 @@
           <div class="profile-meta">
             <h1 class="profile-name">{{ user.username }}</h1>
             <p class="profile-email">{{ user.email || '未绑定邮箱' }}</p>
+            <div v-if="user.auth_methods?.length" class="auth-methods">
+              <span v-for="m in user.auth_methods" :key="m.provider" class="auth-method-tag">{{ { email: '邮箱', github: 'GitHub', google: 'Google', gitee: 'Gitee' }[m.provider] || m.provider }}</span>
+            </div>
+            <button v-if="!user.auth_methods?.some((m) => m.provider === 'email')" class="bind-email-btn" @click="bindEmailOpen = true">绑定邮箱</button>
           </div>
         </div>
         <div class="profile-stats">
@@ -208,6 +212,33 @@
         </div>
       </DialogContent>
     </Dialog>
+
+    <!-- 绑定邮箱弹窗 -->
+    <Dialog :open="bindEmailOpen" @update:open="(v) => (bindEmailOpen = v)">
+      <DialogContent class="max-w-md">
+        <div class="flex flex-col gap-1.5 mb-2 text-center">
+          <DialogTitle>绑定邮箱</DialogTitle>
+          <DialogDescription>绑定后可使用邮箱密码登录本账号</DialogDescription>
+        </div>
+        <form v-if="bindStep === 'form'" class="flex flex-col gap-3" @submit.prevent="startBindEmail">
+          <label class="auth-field">
+            <span class="auth-label">邮箱</span>
+            <input v-model="bindEmail" type="email" class="auth-input" placeholder="请输入邮箱" required />
+          </label>
+          <label class="auth-field">
+            <span class="auth-label">密码</span>
+            <input v-model="bindPassword" type="password" class="auth-input" placeholder="请设置密码（至少6位）" required />
+          </label>
+          <button type="submit" class="auth-submit-btn" :disabled="bindSubmitting">发送验证码</button>
+        </form>
+        <form v-else class="flex flex-col gap-3" @submit.prevent="confirmBindEmail">
+          <p class="text-sm text-muted-foreground">已向 {{ bindEmail }} 发送 6 位验证码</p>
+          <input v-model="bindCode" type="text" maxlength="6" class="auth-input tracking-[0.5em] text-center" placeholder="------" required />
+          <button type="submit" class="auth-submit-btn" :disabled="bindSubmitting">确认绑定</button>
+          <a class="auth-link text-center" @click="bindStep = 'form'">返回修改</a>
+        </form>
+      </DialogContent>
+    </Dialog>
   </section>
 </template>
 <script setup lang="ts">
@@ -217,6 +248,87 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { useToast } from '@/components/ui/toast/use-toast';
 
 const { toast } = useToast();
+
+// ===== 绑定邮箱 =====
+const bindEmail = ref('');
+const bindPassword = ref('');
+const bindCode = ref('');
+const bindStep = ref<'form' | 'code'>('form');
+const bindSubmitting = ref(false);
+const bindToken = ref('');
+
+async function startBindEmail() {
+  if (!bindEmail.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bindEmail.value)) {
+    toast({ title: '邮箱格式不正确', variant: 'destructive' });
+    return;
+  }
+  if (bindPassword.value.length < 6) {
+    toast({ title: '密码至少 6 位', variant: 'destructive' });
+    return;
+  }
+  bindSubmitting.value = true;
+  try {
+    const res = await fetch('/api/auth/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: bindEmail.value, purpose: 'bind-email' }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      toast({ title: '发送失败', description: data.error || '', variant: 'destructive' });
+      return;
+    }
+    bindStep.value = 'code';
+  } catch (err) {
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
+  } finally {
+    bindSubmitting.value = false;
+  }
+}
+
+async function confirmBindEmail() {
+  if (bindCode.value.length !== 6) {
+    toast({ title: '请输入 6 位验证码', variant: 'destructive' });
+    return;
+  }
+  bindSubmitting.value = true;
+  try {
+    // 先验证码换 token
+    const verifyRes = await fetch('/api/auth/verify-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: bindEmail.value, code: bindCode.value, purpose: 'bind-email' }),
+    });
+    const verifyData = await verifyRes.json();
+    if (!verifyData.success) {
+      toast({ title: '验证失败', description: verifyData.error || '', variant: 'destructive' });
+      return;
+    }
+    bindToken.value = verifyData.token;
+    // 再绑定
+    const bindRes = await fetch('/api/auth/bind-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: bindEmail.value, password: bindPassword.value, token: bindToken.value }),
+    });
+    const bindData = await bindRes.json();
+    if (!bindData.success) {
+      toast({ title: '绑定失败', description: bindData.error || '', variant: 'destructive' });
+      return;
+    }
+    toast({ title: '邮箱绑定成功' });
+    bindEmailOpen.value = false;
+    bindStep.value = 'form';
+    bindEmail.value = '';
+    bindPassword.value = '';
+    bindCode.value = '';
+    await fetchUser();
+  } catch (err) {
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
+  } finally {
+    bindSubmitting.value = false;
+  }
+}
 
 // 图片记录（与 /api/images 返回字段一致）
 interface ImageRecord {
@@ -245,8 +357,9 @@ const VIDEO_RE = /\.(mp4|webm|avi|mov|mkv|flv|wmv|mpeg|mpg)$/i;
 
 // 页面状态
 const loading = ref(true);
-const user = ref<{ username: string; avatar_url: string | null; email: string | null } | null>(null);
+const user = ref<{ username: string; avatar_url: string | null; email: string | null; auth_methods?: { provider: string; email: string | null }[] } | null>(null);
 const authOpen = ref(false);
+const bindEmailOpen = ref(false);
 const images = ref<ImageRecord[]>([]);
 const stats = ref<{ total: number; totalSize: number }>({ total: 0, totalSize: 0 });
 const groupMode = ref<'time' | 'tag'>('time');

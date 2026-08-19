@@ -7,6 +7,7 @@
     "dev": "vite --mode dev --open",
     "dev:full": "npx wrangler pages dev --proxy 5173 --compatibility-date=2025-04-09",
     "build": "run-p type-check \"build-only {@}\" --",
+    "dev:all": "run-p dev dev:full",
     "preview": "vite preview",
     "build-only": "vite build --mode pro",
     "type-check": "vue-tsc --build --force",

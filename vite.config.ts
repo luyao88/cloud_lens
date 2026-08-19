@@ -21,7 +21,18 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
-  server: { host: '0.0.0.0' },
+  // 本地开发：以 5173 为入口（前端 HMR，边改边测），
+  // 把后端 API 请求代理到 wrangler pages dev（8788，跑 Pages Functions + D1）。
+  // 用法：pnpm dev:all，浏览器打开 http://localhost:5173
+  server: {
+    host: '0.0.0.0',
+    proxy: {
+      '/api': { target: 'http://127.0.0.1:8788', changeOrigin: true },
+      '/upload': { target: 'http://127.0.0.1:8788', changeOrigin: true },
+      '/imgur-proxy': { target: 'http://127.0.0.1:8788', changeOrigin: true },
+      '/v2': { target: 'http://127.0.0.1:8788', changeOrigin: true },
+    },
+  },
   build: {
     rollupOptions: {
       output: {

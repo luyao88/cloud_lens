@@ -3,7 +3,7 @@
     <div class="header-inner">
       <div class="header-left">
         <img class="logo" src="@/assets/images/logo.png" />
-        <a class="title" href="/">{{ props.title }}</a>
+        <router-link class="title" to="/">{{ props.title }}</router-link>
         <router-link to="/video-to-image" class="nav-link">Video to Image</router-link>
       </div>
       <div class="header-right">
@@ -16,16 +16,19 @@
             <path d="m16 16-4-4-4 4" />
           </svg>
         </button>
-        <a href="https://190223.xyz" target="_blank" title="Superma'Blog" class="social-link">
-          <svg class="social-icon" viewBox="0 0 1024 1024" fill="currentColor">
-            <path
-              d="M1017.771 511.331c0 280.666-227.523 508.191-508.191 508.191s-508.19-227.525-508.19-508.191c0-280.665 227.523-508.19 508.191-508.19s508.19 227.523 508.19 508.19zM191.726 479.984h26.423v188.788h40.113v-188.788h23.558v-37.567h-23.558v-84.048h-40.113v84.048h-26.423v37.567zM274.182 598.096h46.958l-17.669 18.465c15.493 11.884 29.502 23.241 42.023 34.065l25.787-28.334c-10.932-8.701-21.703-16.766-32.314-24.195h92.165v16.555c0 4.882-1.221 9.022-3.662 12.417-2.443 3.395-8.332 5.093-17.669 5.093-8.703 0-21.437-0.532-38.205-1.591 4.88 16.766 8.063 29.393 9.551 37.885 31.622 0 51.998-1.036 61.126-3.104 9.126-2.068 16.023-6.475 20.692-13.212 4.669-6.74 7.004-15.734 7.004-26.981v-27.061h36.929v-31.2h-36.929v-12.417h20.375v-126.389h-81.5v-15.281h94.871v-31.2h-25.15c-7.217-9.973-14.326-19.314-21.33-28.017l-28.334 14.007 10.029 14.007h-30.085v-25.151h-37.567v25.151h-91.687v31.2h91.687v15.281h-78.636v128.3h38.205v-16.236h40.432v14.964h37.567v-14.964h43.298v9.551h-21.012v17.191h-156.951v31.2zM330.85 456.107h40.432v16.555h-40.432v-16.555zM330.85 498.13h40.432v16.555h-40.432v-16.555zM452.146 472.662h-43.298v-16.555h43.298v16.555zM408.85 498.13h43.298v16.555h-43.298v-16.555zM605.279 670.683v-15.281h139.442v15.281h43.298v-109.039c9.443 1.591 19.205 3.131 29.289 4.615l15.919-39.158c-42.449-2.547-79.008-7.323-109.675-14.326 23.241-12.838 42.819-27.697 58.738-44.571v-10.188h38.205v-75.771h-113.179c-3.715-11.247-7.059-20.692-10.029-28.334l-54.441 5.411 9.87 22.923h-123.526v75.771h43.616v-39.796h204.069v19.739h-119.068c3.82-4.14 7.427-8.382 10.825-12.735h-49.346c-22.711 23.558-52.107 43.086-88.186 58.579 8.063 8.703 16.023 18.465 23.877 29.289 15.068-7.642 29.076-15.703 42.023-24.195 9.973 9.129 20.587 17.139 31.836 24.036-30.563 7.537-68.026 14.062-112.382 19.579 5.731 11.461 11.037 23.666 15.919 36.611 10.188-1.696 20.057-3.447 29.609-5.253v106.81h43.296zM774.487 559.257h-190.062c35.339-7.534 65.687-15.81 91.052-24.832 27.061 9.445 60.063 17.725 99.010 24.832zM744.721 619.108h-139.442v-23.558h139.442v23.558zM628.359 470.433h96.305c-14.54 11.249-30.777 20.534-48.709 27.857-17.723-7.323-33.586-16.607-47.596-27.857z"
-            />
-          </svg>
+        <a href="https://190223.xyz" target="_blank" title="Superma'Blog" class="blog-btn">
+          <span class="blog-text">博客</span>
         </a>
         <!-- 未登录：显示登录按钮（点击弹出登录弹窗） -->
         <button v-if="!user" class="login-btn" @click="authOpen = true">
-          <span>去登录</span>
+          <svg class="login-icon" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024">
+            <defs></defs>
+            <path
+              d="M521.7 82c-152.5-.4-286.7 78.5-363.4 197.7c-3.4 5.3.4 12.3 6.7 12.3h70.3c4.8 0 9.3-2.1 12.3-5.8c7-8.5 14.5-16.7 22.4-24.5c32.6-32.5 70.5-58.1 112.7-75.9c43.6-18.4 90-27.8 137.9-27.8c47.9 0 94.3 9.3 137.9 27.8c42.2 17.8 80.1 43.4 112.7 75.9c32.6 32.5 58.1 70.4 76 112.5C865.7 417.8 875 464.1 875 512c0 47.9-9.4 94.2-27.8 137.8c-17.8 42.1-43.4 80-76 112.5s-70.5 58.1-112.7 75.9A352.8 352.8 0 0 1 520.6 866c-47.9 0-94.3-9.4-137.9-27.8A353.84 353.84 0 0 1 270 762.3c-7.9-7.9-15.3-16.1-22.4-24.5c-3-3.7-7.6-5.8-12.3-5.8H165c-6.3 0-10.2 7-6.7 12.3C234.9 863.2 368.5 942 520.6 942c236.2 0 428-190.1 430.4-425.6C953.4 277.1 761.3 82.6 521.7 82zM395.02 624v-76h-314c-4.4 0-8-3.6-8-8v-56c0-4.4 3.6-8 8-8h314v-76c0-6.7 7.8-10.5 13-6.3l141.9 112a8 8 0 0 1 0 12.6l-141.9 112c-5.2 4.1-13 .4-13-6.3z"
+              fill="currentColor"
+            ></path>
+          </svg>
+          <span>登录</span>
         </button>
         <!-- 已登录：显示头像 + 下拉菜单 -->
         <div v-else class="user-menu" @click="showMenu = !showMenu" ref="menuRef">
@@ -176,7 +179,7 @@ onUnmounted(() => {
 
 .title {
   font-weight: 700;
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   color: var(--text-primary);
 }
 
@@ -226,9 +229,8 @@ onUnmounted(() => {
   cursor: pointer;
   transition:
     background-color 0.3s ease,
-    transform 0.3s ease,
     box-shadow 0.3s ease,
-    letter-spacing 0.3s ease;
+    translate 0.3s ease;
   white-space: nowrap;
   overflow: hidden;
   position: relative;
@@ -236,13 +238,13 @@ onUnmounted(() => {
 
 .login-btn:hover {
   background: #03b6aa;
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(3, 182, 170, 0.4);
-  letter-spacing: 0.05em;
+  translate: 0 -2px;
+  box-shadow: 0 6px 16px rgba(3, 182, 170, 0.45);
 }
 
 .login-btn:active {
-  transform: scale(0.97);
+  translate: 0 0;
+  box-shadow: 0 2px 6px rgba(3, 182, 170, 0.3);
 }
 
 .login-icon {
@@ -369,40 +371,46 @@ onUnmounted(() => {
   color: #03b6aa;
 }
 
-.social-link {
+/* 博客按钮：颜色逻辑与主题按钮、上传按钮完全一致 */
+.blog-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
-  background: rgba(143, 143, 143, 0.15);
-  color: var(--text-primary);
+  background: rgba(115, 189, 183, 0.384);
+  color: #111111;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
   transition:
     background-color 0.3s ease,
     transform 0.7s ease,
     color 0.3s ease;
 }
 
-.social-link:hover {
-  background: #03b6aa;
+.blog-btn:hover {
+  background: #028a82;
   color: white;
   transform: rotate(360deg);
 }
 
-.social-icon {
-  width: 1.9rem;
-  height: 1.9rem;
+.blog-text {
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  user-select: none;
 }
 
-:global(html.dark) .social-link {
-  background: rgba(255, 255, 255, 0.15);
-  color: #f0f0f0;
+:global(html.dark .blog-btn) {
+  background: rgba(3, 182, 170, 0.3);
+  color: #fff !important;
 }
 
-:global(html.dark) .social-link:hover {
-  background: #03b6aa;
-  color: white;
+:global(html.dark .blog-btn:hover) {
+  background: #028a82;
+  color: #111111 !important;
 }
 
 /* 上传按钮 */
@@ -413,8 +421,8 @@ onUnmounted(() => {
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
-  background: rgba(143, 143, 143, 0.15);
-  color: var(--text-primary);
+  background: rgba(115, 189, 183, 0.384);
+  color: #111111;
   border: none;
   cursor: pointer;
   transition:
@@ -424,7 +432,7 @@ onUnmounted(() => {
 }
 
 .upload-btn:hover {
-  background: #03b6aa;
+  background: #028a82;
   color: white;
   transform: translateY(-2px);
 }
@@ -438,14 +446,14 @@ onUnmounted(() => {
   height: 1.1rem;
 }
 
-:global(html.dark) .upload-btn {
-  background: rgba(255, 255, 255, 0.15);
-  color: #f0f0f0;
+:global(html.dark .upload-btn) {
+  background: rgba(3, 182, 170, 0.3);
+  color: #fff !important;
 }
 
-:global(html.dark) .upload-btn:hover {
-  background: #03b6aa;
-  color: white;
+:global(html.dark .upload-btn:hover) {
+  background: #028a82;
+  color: #111111 !important;
 }
 
 /* 上传抽屉弹窗 */

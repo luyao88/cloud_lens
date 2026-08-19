@@ -26,7 +26,7 @@ export async function onRequest({ request, env }) {
     return Response.json({ success: false, error: '邮箱格式不正确' }, { status: 400 });
   }
 
-  if (!['register', 'login', 'reset'].includes(purpose)) {
+  if (!['register', 'login', 'reset', 'bind-email'].includes(purpose)) {
     return Response.json({ success: false, error: '无效的 purpose' }, { status: 400 });
   }
 
@@ -43,6 +43,17 @@ export async function onRequest({ request, env }) {
     const existing = await env.cloud_lens_data.prepare('SELECT id FROM users WHERE provider = ? AND provider_id = ?').bind('email', email).first();
     if (!existing) {
       return Response.json({ success: false, error: '该邮箱未注册' }, { status: 400 });
+    }
+  }
+
+  // 绑定邮箱前检查：邮箱是否已被绑定
+  if (purpose === 'bind-email') {
+    const existing = await env.cloud_lens_data
+      .prepare('SELECT user_id FROM user_auth_methods WHERE provider = ? AND provider_id = ?')
+      .bind('email', email)
+      .first();
+    if (existing) {
+      return Response.json({ success: false, error: '该邮箱已被其他账号绑定' }, { status: 400 });
     }
   }
 

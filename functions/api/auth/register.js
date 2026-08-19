@@ -75,6 +75,22 @@ export async function onRequest({ request, env }) {
     );
   }
 
+  // 写入 user_auth_methods 关联表
+  try {
+    await env.cloud_lens_data
+      .prepare(
+        `INSERT INTO user_auth_methods (user_id, provider, provider_id, email, password_hash)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind(user.id, 'email', email, email, passwordHash)
+      .run();
+  } catch (err) {
+    return Response.json(
+      { success: false, error: '服务器内部错误' },
+      { status: 500 },
+    );
+  }
+
   // 创建 session
   const url = new URL(request.url);
   let sessionHeaders;

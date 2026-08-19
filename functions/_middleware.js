@@ -9,6 +9,7 @@ export async function onRequest(context) {
   try {
     return await context.next();
   } catch (err) {
+    console.error('[middleware] unhandled error:', err);
     return new Response(
       JSON.stringify({
         error: 'Internal Server Error',
