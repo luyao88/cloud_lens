@@ -72,7 +72,7 @@ export async function onRequest({ request, env }) {
     token = await signedToken(tokenData);
   } catch (err) {
     console.error('[verify-code] signedToken failed:', err);
-    return Response.json({ success: false, error: 'Token 生成失败，请重试' }, { status: 500 });
+    return Response.json({ success: false, error: `Token 生成失败: ${err?.message || String(err)}` }, { status: 500 });
   }
 
   return Response.json({ success: true, token });

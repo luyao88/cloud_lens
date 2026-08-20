@@ -285,26 +285,11 @@ export async function verifyPassword(password, storedHash) {
 
 /**
  * ============ 临时 Token 签名工具（防伪造） ============
- * 使用 HMAC-SHA256 对 token 内容签名，防止攻击者伪造 register/reset token
- * token 格式: base64(JSON(payload)) + '.' + base64(HMAC-SHA256(signingKey, payload))
+ * 使用 SHA-256 对 token 内容签名，防止攻击者伪造 register/reset token
+ * token 格式: base64(JSON(payload)) + '.' + base64(SHA-256(signingKey + payload))
  */
 
 const TOKEN_SIGN_KEY = 'cloud_lens_verify_token_signing_key_v1';
-
-async function hmacSign(key, message) {
-  const enc = new TextEncoder();
-  const keyData = enc.encode(key);
-  const cryptoKey = await crypto.subtle.importKey('raw', keyData, 'HMAC', false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(message));
-  return bufferToBase64(sig);
-}
-
-async function hmacVerify(key, message, signature) {
-  const enc = new TextEncoder();
-  const cryptoKey = await crypto.subtle.importKey('raw', enc.encode(key), 'HMAC', false, ['verify']);
-  const sigBytes = base64ToBuffer(signature);
-  return crypto.subtle.verify('HMAC', cryptoKey, sigBytes, enc.encode(message));
-}
 
 /**
  * 生成带签名的临时 token
@@ -312,14 +297,11 @@ async function hmacVerify(key, message, signature) {
  * @returns {Promise<string>} 签名后的 token
  */
 export async function signedToken(payload) {
-  try {
-    const body = btoa(JSON.stringify(payload));
-    const sig = await hmacSign(TOKEN_SIGN_KEY, body);
-    return `${body}.${sig}`;
-  } catch (err) {
-    console.error('[signedToken] failed:', err, 'payload:', payload);
-    throw err;
-  }
+  const body = btoa(JSON.stringify(payload));
+  const enc = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', enc.encode(body + TOKEN_SIGN_KEY));
+  const sig = bufferToBase64(hashBuffer);
+  return `${body}.${sig}`;
 }
 
 /**
@@ -332,8 +314,11 @@ export async function verifySignedToken(token) {
   if (parts.length !== 2) return null;
   const [body, sig] = parts;
 
-  const valid = await hmacVerify(TOKEN_SIGN_KEY, body, sig);
-  if (!valid) return null;
+  const enc = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', enc.encode(body + TOKEN_SIGN_KEY));
+  const expectedSig = bufferToBase64(hashBuffer);
+
+  if (sig !== expectedSig) return null;
 
   try {
     const data = JSON.parse(atob(body));
