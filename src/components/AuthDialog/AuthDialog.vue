@@ -26,6 +26,8 @@ const agreedToTerms = ref(false);
 const verifyToken = ref('');
 // 记住我
 const rememberMe = ref(true);
+// 上次登录邮箱
+const LAST_EMAIL_KEY = 'cloudlens_last_email';
 // 密码显示/隐藏
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
@@ -86,6 +88,14 @@ watch(
     }
   },
 );
+
+/** 进入邮箱登录步骤：自动回填上次登录的邮箱 */
+function goEmailLogin() {
+  step.value = 'email-login';
+  if (!email.value) {
+    email.value = localStorage.getItem(LAST_EMAIL_KEY) || '';
+  }
+}
 
 /** ============ OAuth 登录（GitHub / Google）============ */
 function loginWithOAuth(provider: 'github' | 'google' | 'gitee') {
@@ -198,6 +208,8 @@ async function doLogin() {
       toast({ title: '登录失败', description: data.error || '', variant: 'destructive' });
       return;
     }
+    // 记住上次登录邮箱，下次打开登录弹窗时自动回填
+    localStorage.setItem(LAST_EMAIL_KEY, email.value);
     toast({ title: '登录成功' });
     emit('update:open', false);
     emit('success');
@@ -297,7 +309,7 @@ async function handleSubmit() {
           <span>使用 Gitee 登录</span>
         </button>
 
-        <button class="auth-method-btn" @click="step = 'email-login'">
+        <button class="auth-method-btn" @click="goEmailLogin()">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="4" width="20" height="16" rx="2" />
             <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
@@ -380,7 +392,7 @@ async function handleSubmit() {
           </template>
           <template v-else>
             已有账号？
-            <a class="auth-link" @click="step = 'email-login'">去登录</a>
+            <a class="auth-link" @click="goEmailLogin()">去登录</a>
           </template>
         </div>
 

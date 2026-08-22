@@ -11,16 +11,16 @@
 ::view-transition-new(root) {
   z-index: 9999;
 }
-:global(html.dark) ::view-transition-old(*) {
+html.dark::view-transition-old(*) {
   animation: clip 0.5s ease-in reverse;
 }
-:global(html.dark) ::view-transition-new(*) {
+html.dark::view-transition-new(*) {
   animation: none;
 }
-:global(html.dark) ::view-transition-old(root) {
+html.dark::view-transition-old(root) {
   z-index: 9999;
 }
-:global(html.dark) ::view-transition-new(root) {
+html.dark::view-transition-new(root) {
   z-index: 1;
 }
 

@@ -69,15 +69,15 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: linear-gradient(180deg, #e6fffa 0%, #d3f8f0 25%, #f0fdfc 55%, #f0fdfc 100%);
+  background: linear-gradient(180deg, #faf9f5 0%, #f6f5f0 30%, #f3f2ec 100%);
   z-index: 99999;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-:global(html.dark) .splash-mask {
-  background: linear-gradient(180deg, #0a0f0e 0%, #0d1614 25%, #0a0d0c 55%, #0a0d0c 100%);
+html.dark .splash-mask {
+  background: linear-gradient(180deg, #161513 0%, #121110 30%, #0e0d0c 100%);
 }
 
 .splash-content {
@@ -102,14 +102,15 @@ onUnmounted(() => {
 }
 
 .splash-name {
-  font-size: 0.77rem;
+  font-family: var(--font-serif, serif);
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--text-primary, #1a2e2c);
-  letter-spacing: 0.05em;
+  color: var(--text-primary, #2b2723);
+  letter-spacing: 0.06em;
   white-space: nowrap;
 }
 
-:global(html.dark) .splash-logo {
+html.dark .splash-logo {
   mix-blend-mode: screen;
 }
 
@@ -122,7 +123,7 @@ onUnmounted(() => {
   position: relative;
 }
 
-:global(html.dark) .splash-bar-wrap {
+html.dark .splash-bar-wrap {
   background: rgba(255, 255, 255, 0.12);
 }
 

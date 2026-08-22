@@ -26,11 +26,17 @@
           <div v-else class="profile-avatar profile-avatar-default">{{ avatarLetter }}</div>
           <div class="profile-meta">
             <h1 class="profile-name">{{ user.username }}</h1>
-            <p class="profile-email">{{ user.email || '未绑定邮箱' }}</p>
+            <div class="profile-email-row">
+              <p class="profile-email">{{ user.email || '未绑定邮箱' }}</p>
+              <span v-if="hasEmailBound" class="verified-badge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                已验证
+              </span>
+            </div>
             <div v-if="user.auth_methods?.length" class="auth-methods">
               <span v-for="m in user.auth_methods" :key="m.provider" class="auth-method-tag">{{ { email: '邮箱', github: 'GitHub', google: 'Google', gitee: 'Gitee' }[m.provider] || m.provider }}</span>
             </div>
-            <button v-if="!user.auth_methods?.some((m) => m.provider === 'email')" class="bind-email-btn" @click="bindEmailOpen = true">绑定邮箱</button>
+            <button class="bind-email-btn" @click="settingsOpen = true">个人设置</button>
           </div>
         </div>
         <div class="profile-stats">
@@ -167,7 +173,7 @@
     </template>
 
     <!-- 登录弹窗 -->
-    <AuthDialog v-model:open="authOpen" @success="init" />
+    <AuthDialog v-model:open="authOpen" @success="onLoginSuccess" />
 
     <!-- 编辑标签弹窗 -->
     <Dialog :open="tagOpen" @update:open="(v: boolean) => (tagOpen = v)">
@@ -213,57 +219,297 @@
       </DialogContent>
     </Dialog>
 
-    <!-- 绑定邮箱弹窗 -->
-    <Dialog :open="bindEmailOpen" @update:open="(v) => (bindEmailOpen = v)">
-      <DialogContent class="max-w-md">
-        <div class="flex flex-col gap-1.5 mb-2 text-center">
-          <DialogTitle>绑定邮箱</DialogTitle>
-          <DialogDescription>绑定后可使用邮箱密码登录本账号</DialogDescription>
+    <!-- 个人设置弹窗 -->
+    <Dialog :open="settingsOpen" @update:open="(v) => (settingsOpen = v)">
+      <DialogContent class="max-w-md" @pointer-down-outside.prevent @escape-key-down.prevent>
+        <!-- Tab 切换 -->
+        <div class="settings-tabs">
+          <button v-if="hasEmailBound" class="settings-tab" :class="{ active: settingsTab === 'password' }" @click="settingsTab = 'password'">修改密码</button>
+          <button v-if="hasEmailBound" class="settings-tab" :class="{ active: settingsTab === 'forgot' }" @click="settingsTab = 'forgot'">找回密码</button>
+          <button class="settings-tab" :class="{ active: settingsTab === 'email' }" @click="settingsTab = 'email'">{{ hasEmailBound ? '更换邮箱' : '绑定邮箱' }}</button>
         </div>
-        <form v-if="bindStep === 'form'" class="flex flex-col gap-3" @submit.prevent="startBindEmail">
-          <label class="auth-field">
-            <span class="auth-label">邮箱</span>
-            <input v-model="bindEmail" type="email" class="auth-input" placeholder="请输入邮箱" required />
-          </label>
-          <label class="auth-field">
-            <span class="auth-label">密码</span>
-            <input v-model="bindPassword" type="password" class="auth-input" placeholder="请设置密码（至少6位）" required />
-          </label>
-          <button type="submit" class="auth-submit-btn" :disabled="bindSubmitting">发送验证码</button>
-        </form>
-        <form v-else class="flex flex-col gap-3" @submit.prevent="confirmBindEmail">
-          <p class="text-sm text-muted-foreground">已向 {{ bindEmail }} 发送 6 位验证码</p>
-          <input v-model="bindCode" type="text" maxlength="6" class="auth-input tracking-[0.5em] text-center" placeholder="------" required />
-          <button type="submit" class="auth-submit-btn" :disabled="bindSubmitting">确认绑定</button>
-          <a class="auth-link text-center" @click="bindStep = 'form'">返回修改</a>
-        </form>
+
+        <!-- 修改密码 / 找回密码 -->
+        <template v-if="settingsTab === 'password' || settingsTab === 'forgot'">
+          <!-- 子模式切换（仅修改密码 tab） -->
+          <div v-if="settingsTab === 'password'" class="pwd-mode-toggle">
+            <button class="pwd-mode-btn" :class="{ active: pwdMode === 'old' }" @click="pwdMode = 'old'">通过旧密码修改</button>
+            <button class="pwd-mode-btn" :class="{ active: pwdMode === 'reset' }" @click="pwdMode = 'reset'">忘记旧密码</button>
+          </div>
+
+          <!-- 模式 1：旧密码修改 -->
+          <form v-if="settingsTab === 'password' && pwdMode === 'old'" class="bind-form" @submit.prevent="submitChangePassword">
+            <label class="bind-field">
+              <input v-model="changePwd.current" :type="showPwd['cur'] ? 'text' : 'password'" class="bind-input" placeholder="当前密码" required />
+              <button type="button" class="pwd-toggle" @click="showPwd['cur'] = !showPwd['cur']">
+                <svg v-if="showPwd['cur']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <line x1="2" x2="22" y1="2" y2="22" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </label>
+            <label class="bind-field">
+              <input v-model="changePwd.next" :type="showPwd['new'] ? 'text' : 'password'" class="bind-input" placeholder="新密码（至少 6 位）" required />
+              <button type="button" class="pwd-toggle" @click="showPwd['new'] = !showPwd['new']">
+                <svg v-if="showPwd['new']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <line x1="2" x2="22" y1="2" y2="22" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </label>
+            <label class="bind-field">
+              <input v-model="changePwd.confirm" :type="showPwd['cfm'] ? 'text' : 'password'" class="bind-input" placeholder="确认新密码" required />
+              <button type="button" class="pwd-toggle" @click="showPwd['cfm'] = !showPwd['cfm']">
+                <svg v-if="showPwd['cfm']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <line x1="2" x2="22" y1="2" y2="22" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </label>
+            <button type="submit" class="bind-submit" :disabled="changePwd.submitting">
+              <span v-if="!changePwd.submitting">确认修改</span>
+              <span v-else class="bind-loading-dot"></span>
+            </button>
+          </form>
+
+          <!-- 模式 2：邮箱验证码修改 -->
+          <form v-else class="bind-form" @submit.prevent="submitResetPassword">
+            <p class="bind-hint">
+              验证码将发送至 <strong>{{ user?.email }}</strong>
+            </p>
+            <div class="pwd-code-row">
+              <label class="bind-field pwd-code-field">
+                <input v-model="changePwd.code" type="text" inputmode="numeric" maxlength="6" class="bind-input" placeholder="验证码" required />
+              </label>
+              <button type="button" class="pwd-send-btn" :disabled="changePwd.countdown > 0 || changePwd.sending" @click="sendPwdCode">
+                {{ changePwd.countdown > 0 ? `${changePwd.countdown}s` : '发送验证码' }}
+              </button>
+            </div>
+            <label class="bind-field">
+              <input v-model="changePwd.next" :type="showPwd['rnew'] ? 'text' : 'password'" class="bind-input" placeholder="新密码（至少 6 位）" required />
+              <button type="button" class="pwd-toggle" @click="showPwd['rnew'] = !showPwd['rnew']">
+                <svg v-if="showPwd['rnew']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <line x1="2" x2="22" y1="2" y2="22" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </label>
+            <label class="bind-field">
+              <input v-model="changePwd.confirm" :type="showPwd['rcfm'] ? 'text' : 'password'" class="bind-input" placeholder="确认新密码" required />
+              <button type="button" class="pwd-toggle" @click="showPwd['rcfm'] = !showPwd['rcfm']">
+                <svg v-if="showPwd['rcfm']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <line x1="2" x2="22" y1="2" y2="22" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </label>
+            <button type="submit" class="bind-submit" :disabled="changePwd.submitting">
+              <span v-if="!changePwd.submitting">确认重置</span>
+              <span v-else class="bind-loading-dot"></span>
+            </button>
+          </form>
+        </template>
+
+        <!-- 绑定/更换邮箱 -->
+        <template v-else>
+          <div v-if="hasEmailBound" class="bind-current-email">
+            当前邮箱：<strong>{{ user?.email }}</strong>
+          </div>
+          <div class="bind-steps">
+            <div class="bind-step-item" :class="{ active: bindStep === 'email', done: bindStep === 'code' }">
+              <span class="bind-step-num">1</span>
+              <span class="bind-step-label">{{ hasEmailBound ? '新邮箱' : '输入邮箱' }}</span>
+            </div>
+            <div class="bind-step-line" :class="{ done: bindStep === 'code' }"></div>
+            <div class="bind-step-item" :class="{ active: bindStep === 'code' }">
+              <span class="bind-step-num">2</span>
+              <span class="bind-step-label">{{ hasEmailBound ? '验证并确认' : '验证并设置密码' }}</span>
+            </div>
+          </div>
+
+          <Transition name="bind-slide" mode="out-in">
+            <form v-if="bindStep === 'email'" key="email" class="bind-form" @submit.prevent="startBindEmail">
+              <p class="bind-hint">{{ hasEmailBound ? '输入新邮箱地址，将发送验证码进行确认' : '绑定邮箱后可使用邮箱密码登录本账号' }}</p>
+              <label class="bind-field">
+                <input ref="emailInputRef" v-model="bindEmail" type="email" class="bind-input" :placeholder="hasEmailBound ? '请输入新邮箱地址' : '请输入邮箱地址'" required />
+              </label>
+              <button type="submit" class="bind-submit" :disabled="bindSubmitting">
+                <span v-if="!bindSubmitting">发送验证码</span>
+                <span v-else class="bind-loading-dot"></span>
+              </button>
+            </form>
+
+            <form v-else key="code" class="bind-form" @submit.prevent="confirmBindEmail">
+              <p class="bind-hint">
+                验证码已发送至 <strong>{{ bindEmail }}</strong>
+                <a class="bind-change-email" @click="bindStep = 'email'">更换</a>
+              </p>
+              <label class="bind-field">
+                <input ref="codeInputRef" v-model="bindCode" type="text" inputmode="numeric" maxlength="6" class="bind-input bind-code-input" placeholder="输入 6 位验证码" required />
+              </label>
+              <div class="bind-resend-row">
+                <button type="button" class="bind-resend" :disabled="bindCountdown > 0" @click="resendCode">
+                  {{ bindCountdown > 0 ? `${bindCountdown}s 后可重发` : '重新发送验证码' }}
+                </button>
+              </div>
+              <!-- 更换邮箱：输入当前密码验证身份；首次绑定：设置密码 -->
+              <label v-if="hasEmailBound" class="bind-field">
+                <input v-model="bindCurrentPassword" :type="showPwd['bcur'] ? 'text' : 'password'" class="bind-input" placeholder="当前密码（验证身份）" required />
+                <button type="button" class="pwd-toggle" @click="showPwd['bcur'] = !showPwd['bcur']">
+                  <svg v-if="showPwd['bcur']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                    <line x1="2" x2="22" y1="2" y2="22" />
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+              </label>
+              <label v-else class="bind-field">
+                <input v-model="bindPassword" :type="showPwd['bnew'] ? 'text' : 'password'" class="bind-input" placeholder="设置登录密码（至少 6 位）" required />
+                <button type="button" class="pwd-toggle" @click="showPwd['bnew'] = !showPwd['bnew']">
+                  <svg v-if="showPwd['bnew']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                    <line x1="2" x2="22" y1="2" y2="22" />
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+              </label>
+              <button type="submit" class="bind-submit" :disabled="bindSubmitting">
+                <span v-if="!bindSubmitting">{{ hasEmailBound ? '确认更换' : '确认绑定' }}</span>
+                <span v-else class="bind-loading-dot"></span>
+              </button>
+            </form>
+          </Transition>
+        </template>
       </DialogContent>
     </Dialog>
   </section>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue';
 import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast/use-toast';
 
 const { toast } = useToast();
 
-// ===== 绑定邮箱 =====
+// ===== 个人设置 =====
+const settingsOpen = ref(false);
+const settingsTab = ref<'password' | 'email'>('password');
+
+// 修改密码
+const pwdMode = ref<'old' | 'reset'>('old');
+const showPwd = ref<Record<string, boolean>>({});
+const changePwd = ref({ current: '', next: '', confirm: '', code: '', token: '', submitting: false, sending: false, countdown: 0 });
+let pwdCountdownTimer: number | null = null;
+
+// 绑定/更换邮箱
 const bindEmail = ref('');
 const bindPassword = ref('');
+const bindCurrentPassword = ref('');
 const bindCode = ref('');
-const bindStep = ref<'form' | 'code'>('form');
+const bindStep = ref<'email' | 'code'>('email');
 const bindSubmitting = ref(false);
 const bindToken = ref('');
+const bindCountdown = ref(0);
+const emailInputRef = ref<HTMLInputElement | null>(null);
+const codeInputRef = ref<HTMLInputElement | null>(null);
+let countdownTimer: number | null = null;
+
+const startCountdown = () => {
+  bindCountdown.value = 60;
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = window.setInterval(() => {
+    bindCountdown.value--;
+    if (bindCountdown.value <= 0) {
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+  }, 1000);
+};
+
+const focusInput = () => {
+  nextTick(() => {
+    if (bindStep.value === 'email') {
+      emailInputRef.value?.focus();
+    } else {
+      codeInputRef.value?.focus();
+    }
+  });
+};
+
+watch(settingsOpen, (open) => {
+  if (open) {
+    settingsTab.value = hasEmailBound.value ? 'password' : 'email';
+    pwdMode.value = 'old';
+    bindStep.value = 'email';
+    focusInput();
+  } else {
+    // 关闭时重置所有状态
+    bindEmail.value = '';
+    bindPassword.value = '';
+    bindCurrentPassword.value = '';
+    bindCode.value = '';
+    bindStep.value = 'email';
+    bindCountdown.value = 0;
+    pwdMode.value = 'old';
+    showPwd.value = {};
+    changePwd.value = { current: '', next: '', confirm: '', code: '', token: '', submitting: false, sending: false, countdown: 0 };
+    if (countdownTimer) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+    if (pwdCountdownTimer) {
+      clearInterval(pwdCountdownTimer);
+      pwdCountdownTimer = null;
+    }
+  }
+});
+
+watch(bindStep, () => focusInput());
 
 async function startBindEmail() {
   if (!bindEmail.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bindEmail.value)) {
     toast({ title: '邮箱格式不正确', variant: 'destructive' });
-    return;
-  }
-  if (bindPassword.value.length < 6) {
-    toast({ title: '密码至少 6 位', variant: 'destructive' });
     return;
   }
   bindSubmitting.value = true;
@@ -279,6 +525,7 @@ async function startBindEmail() {
       return;
     }
     bindStep.value = 'code';
+    startCountdown();
   } catch (err) {
     toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
   } finally {
@@ -286,9 +533,178 @@ async function startBindEmail() {
   }
 }
 
+async function resendCode() {
+  bindSubmitting.value = true;
+  try {
+    const res = await fetch('/api/auth/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: bindEmail.value, purpose: 'bind-email' }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      toast({ title: '发送失败', description: data.error || '', variant: 'destructive' });
+      return;
+    }
+    toast({ title: '验证码已重新发送' });
+    startCountdown();
+  } catch (err) {
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
+  } finally {
+    bindSubmitting.value = false;
+  }
+}
+
+async function logoutAndRedirect() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch {}
+  user.value = null;
+  // 通知 Header 等组件同步登出状态
+  window.dispatchEvent(new Event('auth:changed'));
+  authOpen.value = true;
+}
+
+/** 登录成功后刷新本页并通知 Header 同步 */
+async function onLoginSuccess() {
+  await init();
+  window.dispatchEvent(new Event('auth:changed'));
+}
+
+async function submitChangePassword() {
+  if (changePwd.value.current.length < 6) {
+    toast({ title: '请输入当前密码', variant: 'destructive' });
+    return;
+  }
+  if (changePwd.value.next.length < 6) {
+    toast({ title: '新密码至少 6 位', variant: 'destructive' });
+    return;
+  }
+  if (changePwd.value.next !== changePwd.value.confirm) {
+    toast({ title: '两次密码不一致', variant: 'destructive' });
+    return;
+  }
+  if (changePwd.value.next === changePwd.value.current) {
+    toast({ title: '新密码不能与旧密码一致', variant: 'destructive' });
+    return;
+  }
+  changePwd.value.submitting = true;
+  try {
+    const res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password: changePwd.value.current, new_password: changePwd.value.next }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      toast({ title: '修改失败', description: data.error || '', variant: 'destructive' });
+      return;
+    }
+    toast({ title: '密码修改成功，请重新登录' });
+    settingsOpen.value = false;
+    await logoutAndRedirect();
+    return;
+  } catch (err) {
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
+  } finally {
+    changePwd.value.submitting = false;
+  }
+}
+
+async function sendPwdCode() {
+  if (!user.value?.email) {
+    toast({ title: '当前账号未绑定邮箱', variant: 'destructive' });
+    return;
+  }
+  changePwd.value.sending = true;
+  try {
+    const res = await fetch('/api/auth/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user.value.email, purpose: 'reset' }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      toast({ title: '发送失败', description: data.error || '', variant: 'destructive' });
+      return;
+    }
+    toast({ title: '验证码已发送' });
+    changePwd.value.countdown = 60;
+    if (pwdCountdownTimer) clearInterval(pwdCountdownTimer);
+    pwdCountdownTimer = window.setInterval(() => {
+      changePwd.value.countdown--;
+      if (changePwd.value.countdown <= 0) {
+        if (pwdCountdownTimer) clearInterval(pwdCountdownTimer);
+        pwdCountdownTimer = null;
+      }
+    }, 1000);
+  } catch (err) {
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
+  } finally {
+    changePwd.value.sending = false;
+  }
+}
+
+async function submitResetPassword() {
+  if (changePwd.value.code.length !== 6) {
+    toast({ title: '请输入 6 位验证码', variant: 'destructive' });
+    return;
+  }
+  if (changePwd.value.next.length < 6) {
+    toast({ title: '新密码至少 6 位', variant: 'destructive' });
+    return;
+  }
+  if (changePwd.value.next !== changePwd.value.confirm) {
+    toast({ title: '两次密码不一致', variant: 'destructive' });
+    return;
+  }
+  changePwd.value.submitting = true;
+  try {
+    // 先验证码换 token
+    const verifyRes = await fetch('/api/auth/verify-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user.value!.email, code: changePwd.value.code, purpose: 'reset' }),
+    });
+    const verifyData = await verifyRes.json();
+    if (!verifyData.success) {
+      toast({ title: '验证失败', description: verifyData.error || '', variant: 'destructive' });
+      return;
+    }
+    changePwd.value.token = verifyData.token;
+    // 重置密码
+    const resetRes = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user.value!.email, password: changePwd.value.next, token: changePwd.value.token }),
+    });
+    const resetData = await resetRes.json();
+    if (!resetData.success) {
+      toast({ title: '重置失败', description: resetData.error || '', variant: 'destructive' });
+      return;
+    }
+    toast({ title: '密码重置成功，请重新登录' });
+    settingsOpen.value = false;
+    await logoutAndRedirect();
+    return;
+  } catch (err) {
+    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
+  } finally {
+    changePwd.value.submitting = false;
+  }
+}
+
 async function confirmBindEmail() {
   if (bindCode.value.length !== 6) {
     toast({ title: '请输入 6 位验证码', variant: 'destructive' });
+    return;
+  }
+  if (hasEmailBound.value && bindCurrentPassword.value.length < 6) {
+    toast({ title: '请输入当前密码', variant: 'destructive' });
+    return;
+  }
+  if (!hasEmailBound.value && bindPassword.value.length < 6) {
+    toast({ title: '密码至少 6 位', variant: 'destructive' });
     return;
   }
   bindSubmitting.value = true;
@@ -305,23 +721,24 @@ async function confirmBindEmail() {
       return;
     }
     bindToken.value = verifyData.token;
-    // 再绑定
+    // 再绑定/更换
     const bindRes = await fetch('/api/auth/bind-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: bindEmail.value, password: bindPassword.value, token: bindToken.value }),
+      body: JSON.stringify({
+        email: bindEmail.value,
+        password: hasEmailBound.value ? undefined : bindPassword.value,
+        token: bindToken.value,
+        current_password: hasEmailBound.value ? bindCurrentPassword.value : undefined,
+      }),
     });
     const bindData = await bindRes.json();
     if (!bindData.success) {
-      toast({ title: '绑定失败', description: bindData.error || '', variant: 'destructive' });
+      toast({ title: hasEmailBound.value ? '更换失败' : '绑定失败', description: bindData.error || '', variant: 'destructive' });
       return;
     }
-    toast({ title: '邮箱绑定成功' });
-    bindEmailOpen.value = false;
-    bindStep.value = 'form';
-    bindEmail.value = '';
-    bindPassword.value = '';
-    bindCode.value = '';
+    toast({ title: hasEmailBound.value ? '邮箱更换成功' : '邮箱绑定成功' });
+    settingsOpen.value = false;
     await fetchUser();
   } catch (err) {
     toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
@@ -329,6 +746,11 @@ async function confirmBindEmail() {
     bindSubmitting.value = false;
   }
 }
+
+onUnmounted(() => {
+  if (countdownTimer) clearInterval(countdownTimer);
+  if (pwdCountdownTimer) clearInterval(pwdCountdownTimer);
+});
 
 // 图片记录（与 /api/images 返回字段一致）
 interface ImageRecord {
@@ -359,7 +781,6 @@ const VIDEO_RE = /\.(mp4|webm|avi|mov|mkv|flv|wmv|mpeg|mpg)$/i;
 const loading = ref(true);
 const user = ref<{ username: string; avatar_url: string | null; email: string | null; auth_methods?: { provider: string; email: string | null }[] } | null>(null);
 const authOpen = ref(false);
-const bindEmailOpen = ref(false);
 const images = ref<ImageRecord[]>([]);
 const stats = ref<{ total: number; totalSize: number }>({ total: 0, totalSize: 0 });
 const groupMode = ref<'time' | 'tag'>('time');
@@ -367,6 +788,7 @@ const activeKey = ref('');
 const loadingMore = ref(false);
 
 const avatarLetter = computed(() => (user.value?.username || '?')[0].toUpperCase());
+const hasEmailBound = computed(() => user.value?.auth_methods?.some((m) => m.provider === 'email') ?? false);
 
 // ===== 工具函数 =====
 const fileKey = (img: ImageRecord) => img.imgur_url.split('/').pop() || '';

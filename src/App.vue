@@ -1,12 +1,14 @@
 <template>
   <LoadingSplash />
-  <Header title="镜云图床 CloudLens" desc="免费无限图床" />
+  <Header title="镜云图床 CloudLens" />
   <main>
-    <RouterView v-slot="{ Component }">
-      <keep-alive :include="['Home', 'Legal']">
-        <component :is="Component" />
-      </keep-alive>
-    </RouterView>
+    <Transition name="page">
+      <RouterView v-slot="{ Component }" key="$route.path">
+        <keep-alive :include="['Home', 'Legal']">
+          <component :is="Component" />
+        </keep-alive>
+      </RouterView>
+    </Transition>
   </main>
   <Footer />
   <UploadTray />

@@ -114,10 +114,7 @@ export async function findOrCreateUser(env, provider, providerId, email, usernam
 
   // 2. 如果有 email，尝试按 email 关联到已有用户
   if (email) {
-    const existingUser = await env.cloud_lens_data
-      .prepare('SELECT id, username, avatar_url, email FROM users WHERE email = ?')
-      .bind(email)
-      .first();
+    const existingUser = await env.cloud_lens_data.prepare('SELECT id, username, avatar_url, email FROM users WHERE email = ?').bind(email).first();
 
     if (existingUser) {
       // 关联新登录方式到已有用户（不更新 users 表的 provider）
@@ -131,10 +128,7 @@ export async function findOrCreateUser(env, provider, providerId, email, usernam
 
       // 更新 users 表的 avatar/username（如果 OAuth 有新信息）
       if (avatarUrl && !existingUser.avatar_url) {
-        await env.cloud_lens_data
-          .prepare('UPDATE users SET avatar_url = ? WHERE id = ?')
-          .bind(avatarUrl, existingUser.id)
-          .run();
+        await env.cloud_lens_data.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').bind(avatarUrl, existingUser.id).run();
         existingUser.avatar_url = avatarUrl;
       }
 
@@ -171,16 +165,23 @@ export async function findOrCreateUser(env, provider, providerId, email, usernam
 
 /**
  * 获取用户已绑定的所有登录方式
+ * 旧用户可能没有 user_auth_methods 记录，回退到 users 表
  */
 export async function getUserAuthMethods(env, userId) {
-  const methods = await env.cloud_lens_data
-    .prepare(
-      `SELECT provider, provider_id, email FROM user_auth_methods WHERE user_id = ? ORDER BY created_at`,
-    )
-    .bind(userId)
-    .all();
+  const methods = await env.cloud_lens_data.prepare(`SELECT provider, provider_id, email FROM user_auth_methods WHERE user_id = ? ORDER BY created_at`).bind(userId).all();
 
-  return methods.results || [];
+  if (methods.results && methods.results.length > 0) {
+    return methods.results;
+  }
+
+  // 回退：旧用户从 users 表构造 auth method
+  const user = await env.cloud_lens_data.prepare('SELECT provider, provider_id, email FROM users WHERE id = ?').bind(userId).first();
+
+  if (user) {
+    return [{ provider: user.provider, provider_id: user.provider_id, email: user.email }];
+  }
+
+  return [];
 }
 
 /**
@@ -189,10 +190,7 @@ export async function getUserAuthMethods(env, userId) {
  */
 export async function bindAuthMethod(env, userId, provider, providerId, email = null, passwordHash = null) {
   // 检查该方式是否已被绑定
-  const existing = await env.cloud_lens_data
-    .prepare('SELECT user_id FROM user_auth_methods WHERE provider = ? AND provider_id = ?')
-    .bind(provider, String(providerId))
-    .first();
+  const existing = await env.cloud_lens_data.prepare('SELECT user_id FROM user_auth_methods WHERE provider = ? AND provider_id = ?').bind(provider, String(providerId)).first();
 
   if (existing) {
     return { success: false, error: '该登录方式已被绑定' };

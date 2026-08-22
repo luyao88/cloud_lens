@@ -1,10 +1,23 @@
-import { fileURLToPath, URL } from 'node:url'
+import { fileURLToPath, URL } from 'node:url';
 
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
 
-import autoprefixer from 'autoprefixer'
-import tailwind from 'tailwindcss'
+import autoprefixer from 'autoprefixer';
+import tailwind from 'tailwindcss';
+
+// 开发环境禁止浏览器缓存，避免旧代码导致白屏
+const devNoCache = {
+  name: 'dev-no-cache',
+  configureServer(server: any) {
+    server.middlewares.use((req: any, res: any, next: any) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      next();
+    });
+  },
+};
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -13,12 +26,10 @@ export default defineConfig({
       plugins: [tailwind(), autoprefixer()],
     },
   },
-  plugins: [
-    vue(),
-  ],
+  plugins: [vue(), devNoCache],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   // 本地开发：以 5173 为入口（前端 HMR，边改边测），
@@ -47,4 +58,4 @@ export default defineConfig({
       },
     },
   },
-})
+});

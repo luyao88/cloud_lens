@@ -8,6 +8,8 @@
     "dev:full": "npx wrangler pages dev --proxy 5173 --compatibility-date=2025-04-09",
     "build": "run-p type-check \"build-only {@}\" --",
     "dev:all": "run-p dev dev:full",
+    "clean": "node -e \"const{rmSync}=require('fs');['node_modules/.vite','node_modules/.cache','.wrangler','dist'].forEach(d=>{rmSync(d,{recursive:true,force:true});console.log('已清除: '+d)})\"",
+    "fresh": "pnpm run clean && npx wrangler d1 execute cloud_lens_data --local --file=cloud_lens_data.sql && pnpm run dev:all",
     "preview": "vite preview",
     "build-only": "vite build --mode pro",
     "type-check": "vue-tsc --build --force",

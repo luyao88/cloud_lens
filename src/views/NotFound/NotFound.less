@@ -1,0 +1,162 @@
+.NotFound {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 0 1rem;
+}
+
+// ============ 标题区 ============
+.nf-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
+}
+
+// 宋体大 404，中间 0 斜体青色（与首页 hero 的强调词呼应）
+.nf-code {
+  font-family: var(--font-serif);
+  font-size: clamp(4.5rem, 12vw, 7rem);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+
+  em {
+    font-style: italic;
+    color: #03b6aa;
+  }
+}
+
+.nf-title {
+  font-family: var(--font-serif);
+  font-size: clamp(1.15rem, 3vw, 1.5rem);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.nf-sub {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+// ============ 游戏卡片（暖纸棋盘） ============
+.nf-game-card {
+  margin-top: 1.75rem;
+  width: 100%;
+  max-width: 640px;
+  padding: 1rem;
+  background: #faf9f5;
+  border: 1px solid var(--border-base);
+  border-radius: 1.25rem;
+  box-shadow: 0 20px 50px -12px rgba(62, 55, 40, 0.14);
+}
+
+html.dark .nf-game-card {
+  box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.nf-game {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+
+  // Phaser canvas 响应式缩放
+  :deep(canvas) {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.75rem;
+  }
+}
+
+.nf-game-error {
+  padding: 4rem 1rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+// ============ 操作区（52pojie 式胶囊双按钮） ============
+.nf-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  margin-top: 1.75rem;
+}
+
+.nf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.625rem 1.75rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: 999px;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.nf-btn-primary {
+  color: #fff;
+  background: #03b6aa;
+
+  &:hover {
+    background: #029e93;
+    box-shadow: 0 10px 24px -8px rgba(3, 182, 170, 0.45);
+    transform: translateY(-1px);
+  }
+}
+
+.nf-btn-ghost {
+  color: var(--text-secondary);
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-base);
+
+  &:hover {
+    color: #03b6aa;
+    border-color: var(--border-hover);
+    background: var(--bg-input-hover);
+  }
+}
+
+// ============ 游戏来源 ============
+.nf-credit {
+  margin-top: 1.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+
+  a {
+    color: var(--text-secondary);
+    border-bottom: 1px dashed var(--border-hover);
+    transition: color 0.2s;
+
+    &:hover {
+      color: #03b6aa;
+    }
+  }
+}
+
+// ============ 响应式 ============
+@media screen and (max-width: 639px) {
+  .nf-title,
+  .nf-sub {
+    white-space: normal;
+  }
+
+  .nf-actions {
+    flex-direction: column;
+    gap: 0.625rem;
+    width: 100%;
+
+    .nf-btn {
+      width: 100%;
+    }
+  }
+}

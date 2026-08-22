@@ -44,11 +44,12 @@ export async function onRequest({ request, env }) {
     return Response.json({ success: false, error: 'token 已过期，请重新验证' }, { status: 400 });
   }
 
-  // 查找用户
-  const user = await env.cloud_lens_data
-    .prepare('SELECT id FROM users WHERE provider = ? AND provider_id = ?')
-    .bind('email', email)
-    .first();
+  // 查找用户（优先 user_auth_methods，回退 users 表）
+  let user = await env.cloud_lens_data.prepare('SELECT user_id as id FROM user_auth_methods WHERE provider = ? AND provider_id = ?').bind('email', email).first();
+
+  if (!user) {
+    user = await env.cloud_lens_data.prepare('SELECT id FROM users WHERE provider = ? AND provider_id = ?').bind('email', email).first();
+  }
 
   if (!user) {
     return Response.json({ success: false, error: '该邮箱未注册' }, { status: 400 });
@@ -58,15 +59,13 @@ export async function onRequest({ request, env }) {
   const passwordHash = await hashPassword(password);
 
   try {
-    await env.cloud_lens_data
-      .prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .bind(passwordHash, user.id)
-      .run();
+    // 更新 users 表
+    await env.cloud_lens_data.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(passwordHash, user.id).run();
+
+    // 同步更新 user_auth_methods
+    await env.cloud_lens_data.prepare('UPDATE user_auth_methods SET password_hash = ? WHERE user_id = ? AND provider = ?').bind(passwordHash, user.id, 'email').run();
   } catch (err) {
-    return Response.json(
-      { success: false, error: '服务器内部错误' },
-      { status: 500 },
-    );
+    return Response.json({ success: false, error: '服务器内部错误' }, { status: 500 });
   }
 
   return Response.json({ success: true });

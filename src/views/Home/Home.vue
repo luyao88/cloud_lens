@@ -2,10 +2,17 @@
   <section class="Home">
     <!-- Hero 区域 -->
     <div class="hero">
-      <div class="hero-bg"></div>
+      <div class="hero-bg">
+        <span class="hero-blob blob-a"></span>
+        <span class="hero-blob blob-b"></span>
+        <span class="hero-bubble b1"></span>
+        <span class="hero-bubble b2"></span>
+        <span class="hero-bubble b3"></span>
+        <span class="hero-bubble b4"></span>
+      </div>
       <div class="hero-content">
-        <h1 class="hero-title">镜云图床<span class="hero-subtitle">CloudLens</span></h1>
-        <p class="hero-desc">免费无限图床 · 全球 CDN 加速 · 支持图片与视频</p>
+        <h1 class="hero-title">把每一张图，<em>轻盈</em>放上云端</h1>
+        <p class="hero-desc">镜云图床 CloudLens — 免费无限存储 · 全球 CDN 加速 · 图片视频皆可托管</p>
         <div class="hero-stats">
           <div class="stat">
             <span class="stat-num">∞</span>

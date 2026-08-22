@@ -28,7 +28,7 @@
 <style scoped>
 .footer {
   width: 100%;
-  max-width: 1229px;
+  max-width: var(--main-max-width);
   margin-top: 2rem;
   padding-bottom: 1rem;
 }
@@ -63,8 +63,11 @@
 }
 
 .footer-title {
-  font-size: 1rem;
-  font-weight: 500;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
   color: var(--text-primary);
 }
 

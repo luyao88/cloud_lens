@@ -4,10 +4,11 @@
       <div class="header-left">
         <img class="logo" src="@/assets/images/logo.png" />
         <router-link class="title" to="/">{{ props.title }}</router-link>
-        <router-link to="/video-to-image" class="nav-link">Video to Image</router-link>
       </div>
+      <nav class="header-nav">
+        <router-link to="/video-to-image" class="nav-link">Video to Image</router-link>
+      </nav>
       <div class="header-right">
-        <span class="desc">{{ props.desc }}</span>
         <ThemeToggle />
         <button class="upload-btn" @click="uploadOpen = true" title="上传文件">
           <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -52,7 +53,7 @@
             </div>
             <hr />
             <router-link to="/profile" class="dropdown-item" @click="showMenu = false">我的主页</router-link>
-            <a href="/api/auth/logout" class="dropdown-item">Logout</a>
+            <button class="dropdown-item" @click="handleLogout">Logout</button>
           </div>
         </div>
       </div>
@@ -91,7 +92,7 @@ import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 import ForgotPassword from '@/components/ForgotPassword/ForgotPassword.vue';
 import Upload from '@/components/Upload/Upload.vue';
 
-const props = defineProps(['title', 'desc']);
+const props = defineProps(['title']);
 
 const user = ref<{ username: string; avatar_url: string; email: string } | null>(null);
 const showMenu = ref(false);
@@ -116,17 +117,29 @@ const fetchUser = async () => {
   try {
     const res = await fetch('/api/auth/me');
     const data = await res.json();
-    if (data.user) {
-      user.value = data.user;
-    }
+    user.value = data.user || null;
   } catch {}
 };
+
+// 退出登录：AJAX 方式，不刷新整页
+const handleLogout = async () => {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch {}
+  showMenu.value = false;
+  user.value = null;
+  window.dispatchEvent(new Event('auth:changed'));
+};
+
+// 登录状态变化（其他页面登录/退出）时同步刷新
+const onAuthChanged = () => fetchUser();
 
 onMounted(async () => {
   await fetchUser();
 
   // 点击外部关闭下拉菜单
   document.addEventListener('click', closeMenu);
+  window.addEventListener('auth:changed', onAuthChanged);
 });
 
 const closeMenu = (e: MouseEvent) => {
@@ -137,6 +150,7 @@ const closeMenu = (e: MouseEvent) => {
 
 onUnmounted(() => {
   document.removeEventListener('click', closeMenu);
+  window.removeEventListener('auth:changed', onAuthChanged);
 });
 </script>
 <style scoped>
@@ -160,14 +174,14 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  max-width: 1229px;
+  max-width: var(--main-max-width);
   height: 4.5rem;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   height: 100%;
 }
 
@@ -178,18 +192,31 @@ onUnmounted(() => {
 }
 
 .title {
-  font-weight: 700;
-  font-size: 0.95rem;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
   color: var(--text-primary);
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 100%;
 }
 
 .nav-link {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-secondary);
-  padding: 0.25rem 0.75rem;
-  border-radius: 0.375rem;
-  transition: all 0.2s;
+  padding: 0.375rem 0.875rem;
+  border-radius: 0.5rem;
+  white-space: nowrap;
+  transition:
+    color 0.2s,
+    background-color 0.2s;
 }
 
 .nav-link:hover {
@@ -203,13 +230,8 @@ onUnmounted(() => {
   gap: 1.25rem;
 }
 
-.desc {
-  font-size: 1rem;
-  color: var(--text-muted);
-}
-
 @media (max-width: 640px) {
-  .desc {
+  .header-nav {
     display: none;
   }
 }
@@ -297,7 +319,7 @@ onUnmounted(() => {
   z-index: 100;
 }
 
-:global(html.dark) .dropdown-menu {
+html.dark .dropdown-menu {
   background: #1f2937;
 }
 
@@ -360,9 +382,15 @@ onUnmounted(() => {
 
 .dropdown-item {
   display: block;
+  width: 100%;
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   color: var(--text-secondary);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
   transition: background 0.2s;
 }
 
@@ -471,7 +499,7 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-:global(html.dark) .upload-drawer {
+html.dark .upload-drawer {
   background: #1f2937;
 }
 

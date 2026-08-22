@@ -102,10 +102,17 @@ const imgTypeFormat = async (files: File[]) => {
 
 // 粘贴上传
 const pasteUpload = (v: any) => {
-  v.preventDefault();
+  const target = v.target as HTMLElement;
+  // 输入框/文本域内的粘贴不拦截，让用户正常粘贴文本
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+    return;
+  }
   const pasteData = v.clipboardData || (window as any).clipboardData;
   const files = pasteData.files;
-  fileListChange(files, true);
+  if (files && files.length > 0) {
+    v.preventDefault();
+    fileListChange(files, true);
+  }
 };
 
 onMounted(() => {

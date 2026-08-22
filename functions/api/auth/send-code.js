@@ -40,7 +40,17 @@ export async function onRequest({ request, env }) {
 
   // 登录/重置密码前检查：邮箱是否已注册
   if (purpose === 'login' || purpose === 'reset') {
-    const existing = await env.cloud_lens_data.prepare('SELECT id FROM users WHERE provider = ? AND provider_id = ?').bind('email', email).first();
+    // 优先查 user_auth_methods，回退 users 表
+    let existing = await env.cloud_lens_data
+      .prepare('SELECT user_id FROM user_auth_methods WHERE provider = ? AND provider_id = ?')
+      .bind('email', email)
+      .first();
+    if (!existing) {
+      existing = await env.cloud_lens_data
+        .prepare('SELECT id FROM users WHERE provider = ? AND provider_id = ?')
+        .bind('email', email)
+        .first();
+    }
     if (!existing) {
       return Response.json({ success: false, error: '该邮箱未注册' }, { status: 400 });
     }

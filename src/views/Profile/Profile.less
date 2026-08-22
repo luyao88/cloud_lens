@@ -145,6 +145,36 @@
   word-break: break-all;
 }
 
+.profile-email-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 0.375rem;
+
+  svg {
+    width: 0.65rem;
+    height: 0.65rem;
+  }
+}
+
+:global(html.dark) .verified-badge {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.15);
+}
+
 .auth-methods {
   display: flex;
   flex-wrap: wrap;
@@ -755,64 +785,364 @@
   }
 }
 
-// 绑定邮箱弹窗表单
-.auth-field {
+// ============ 绑定邮箱弹窗 ============
+.settings-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-base);
+  padding-bottom: 0;
 }
 
-.auth-label {
+.settings-tab {
+  padding: 0.5rem 0.875rem;
+  border: none;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+
+  &.active {
+    color: #03b6aa;
+    border-bottom-color: #03b6aa;
+  }
+}
+
+.bind-current-email {
+  margin-bottom: 1rem;
+  padding: 0.625rem 0.875rem;
   font-size: 0.8rem;
   color: var(--text-muted);
+  background: var(--bg-accent-light, rgba(3, 182, 170, 0.06));
+  border-radius: 0.5rem;
+
+  strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
 }
 
-.auth-input {
-  height: 2.5rem;
-  padding: 0 0.75rem;
-  font-size: 0.875rem;
+// 修改密码子模式切换
+.pwd-mode-toggle {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  background: var(--bg-accent-light, rgba(0, 0, 0, 0.04));
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+}
+
+.pwd-mode-btn {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &.active {
+    background: var(--bg-elevated, #fff);
+    color: #03b6aa;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  :global(html.dark) &.active {
+    background: #1e293b;
+  }
+}
+
+// 验证码 + 发送按钮行
+.pwd-code-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.pwd-code-field {
+  flex: 1;
+}
+
+.pwd-send-btn {
+  flex-shrink: 0;
+  padding: 0 0.875rem;
+  border: 1px solid var(--border-base, #e2e8f0);
+  border-radius: 0.5rem;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #03b6aa;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+
+  &:hover:not(:disabled) {
+    background: rgba(3, 182, 170, 0.06);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.bind-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding: 0 0.5rem;
+}
+
+.bind-step-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+.bind-step-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--bg-accent-light, rgba(3, 182, 170, 0.1));
+  color: var(--text-muted);
+  border: 1.5px solid transparent;
+  transition: all 0.3s;
+}
+
+.bind-step-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color 0.3s;
+}
+
+.bind-step-item.active .bind-step-num {
+  background: #03b6aa;
+  color: #fff;
+}
+
+.bind-step-item.active .bind-step-label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.bind-step-item.done .bind-step-num {
+  background: #03b6aa;
+  color: #fff;
+}
+
+.bind-step-item.done .bind-step-num::after {
+  content: '✓';
+  font-size: 0.7rem;
+}
+
+.bind-step-item.done .bind-step-num {
+  font-size: 0;
+}
+
+.bind-step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border-base);
+  border-radius: 1px;
+  transition: background 0.3s;
+}
+
+.bind-step-line.done {
+  background: #03b6aa;
+}
+
+.bind-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.bind-hint {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+
+  strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+}
+
+.bind-change-email {
+  margin-left: 0.5rem;
+  color: #03b6aa;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 0.75rem;
+}
+
+.bind-field {
+  position: relative;
+  display: block;
+}
+
+.pwd-toggle {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0.25rem;
+  transition: color 0.2s;
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  &:hover {
+    color: var(--text-primary, #1e293b);
+  }
+}
+
+.bind-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 2.75rem;
+  padding: 0 2.25rem 0 0.875rem;
+  font-size: 0.9rem;
   color: var(--text-primary);
   background: var(--bg-field, #fff);
   border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+
+  &:focus {
+    border-color: #03b6aa;
+    box-shadow: 0 0 0 3px rgba(3, 182, 170, 0.12);
+  }
 }
 
-.auth-input:focus {
-  border-color: #03b6aa;
+.bind-code-input {
+  text-align: center;
+  letter-spacing: 0.4em;
+  font-size: 1.1rem;
+  font-weight: 600;
 }
 
-:global(html.dark) .auth-input {
+:global(html.dark) .bind-input {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.1);
   color: #e2e8f0;
 }
 
-.auth-submit-btn {
-  height: 2.5rem;
-  font-size: 0.875rem;
+.bind-resend-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -0.25rem;
+}
+
+.bind-resend {
+  border: none;
+  background: transparent;
+  font-size: 0.75rem;
+  color: #03b6aa;
+  cursor: pointer;
+  padding: 0.25rem 0;
+  transition: opacity 0.2s;
+
+  &:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    color: var(--text-muted);
+    cursor: not-allowed;
+  }
+}
+
+.bind-submit {
+  height: 2.75rem;
+  margin-top: 0.25rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: #fff;
   background: linear-gradient(135deg, #03b6aa, #0d9488);
   border: none;
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, transform 0.1s;
+
+  &:hover:not(:disabled) {
+    opacity: 0.92;
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
-.auth-submit-btn:hover:not(:disabled) {
-  opacity: 0.9;
+.bind-loading-dot {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: bind-spin 0.6s linear infinite;
 }
 
-.auth-submit-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+@keyframes bind-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.auth-link {
-  font-size: 0.8rem;
-  color: #03b6aa;
-  cursor: pointer;
-  text-decoration: underline;
+// 步骤切换过渡动画
+.bind-slide-enter-active,
+.bind-slide-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.bind-slide-enter-from {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.bind-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
 }
