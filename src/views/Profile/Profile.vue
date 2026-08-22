@@ -434,7 +434,7 @@ const { toast } = useToast();
 
 // ===== 个人设置 =====
 const settingsOpen = ref(false);
-const settingsTab = ref<'password' | 'email'>('password');
+const settingsTab = ref<'password' | 'email' | 'forgot'>('password');
 
 // 修改密码
 const pwdMode = ref<'old' | 'reset'>('old');
