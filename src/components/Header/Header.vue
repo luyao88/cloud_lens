@@ -33,7 +33,7 @@
         </button>
         <!-- 已登录：显示头像 + 下拉菜单 -->
         <div v-else class="user-menu" @click="showMenu = !showMenu" ref="menuRef">
-          <img v-if="user.avatar_url" :src="`/imgur-proxy/HCki6aX.jpeg`" :alt="user.username" class="user-avatar" />
+          <img v-if="user.avatar_url" :src="`${nodeHost}/v2/HCki6aX.jpeg`" :alt="user.username" class="user-avatar" />
           <div v-else class="user-avatar user-avatar-default">
             {{ (user.username || '?')[0].toUpperCase() }}
           </div>
@@ -42,7 +42,7 @@
           </Teleport>
           <div v-if="showMenu" class="dropdown-menu" @click.stop>
             <div class="dropdown-header">
-              <img v-if="user.avatar_url" :src="`/imgur-proxy/HCki6aX.jpeg`" class="dropdown-avatar" />
+              <img v-if="user.avatar_url" :src="`${nodeHost}/v2/HCki6aX.jpeg`" class="dropdown-avatar" />
               <div v-else class="dropdown-avatar dropdown-avatar-default">
                 {{ (user.username || '?')[0].toUpperCase() }}
               </div>
@@ -117,6 +117,7 @@ import Upload from '@/components/Upload/Upload.vue';
 
 const props = defineProps(['title']);
 
+const nodeHost = import.meta.env.VITE_IMG_API_URL || location.origin;
 const user = ref<{ username: string; avatar_url: string; email: string } | null>(null);
 const showMenu = ref(false);
 const menuRef = ref<HTMLElement | null>(null);

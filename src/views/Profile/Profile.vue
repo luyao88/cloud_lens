@@ -24,7 +24,7 @@
         <div class="profile-banner"></div>
         <div class="profile-body">
           <div class="profile-avatar-wrap">
-            <img v-if="user.avatar_url" :src="`/imgur-proxy/HCki6aX.jpeg`" :alt="user.username" class="profile-avatar" />
+            <img v-if="user.avatar_url" :src="`${nodeHost}/v2/HCki6aX.jpeg`" :alt="user.username" class="profile-avatar" />
             <div v-else class="profile-avatar profile-avatar-default">{{ avatarLetter }}</div>
           </div>
           <div class="profile-meta">
@@ -161,13 +161,7 @@
                     <path d="m9 15 3-3 3 3" />
                   </svg>
                 </button>
-                <button
-                  v-if="currentAlbum"
-                  class="action-btn star-btn"
-                  :class="{ active: currentAlbum.cover_image_id === img.id }"
-                  :title="currentAlbum.cover_image_id === img.id ? '取消相册封面' : '设为相册封面'"
-                  @click="setCoverImage(img)"
-                >
+                <button v-if="currentAlbum" class="action-btn star-btn" :class="{ active: currentAlbum.cover_image_id === img.id }" :title="currentAlbum.cover_image_id === img.id ? '取消相册封面' : '设为相册封面'" @click="setCoverImage(img)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                   </svg>
@@ -190,9 +184,7 @@
             </div>
           </div>
         </div>
-        <div v-else class="state-tip">
-          {{ currentAlbum ? '该相册暂无图片，' : '暂无未分组图片，' }}<router-link to="/" class="link">去上传</router-link>
-        </div>
+        <div v-else class="state-tip">{{ currentAlbum ? '该相册暂无图片，' : '暂无未分组图片，' }}<router-link to="/" class="link">去上传</router-link></div>
       </div>
 
       <!-- 相册详情视图 -->
@@ -720,9 +712,7 @@ const albumDialogMode = ref<AlbumDialogMode>('create');
 const albumNameInput = ref('');
 const albumSubmitting = ref(false);
 
-const albumDialogTitle = computed(() =>
-  albumDialogMode.value === 'rename' ? '重命名相册' : albumDialogMode.value === 'create-child' ? '新建子相册' : '新建相册',
-);
+const albumDialogTitle = computed(() => (albumDialogMode.value === 'rename' ? '重命名相册' : albumDialogMode.value === 'create-child' ? '新建子相册' : '新建相册'));
 
 const albumDialogDesc = computed(() => {
   if (albumDialogMode.value === 'rename') return `修改「${currentAlbum.value?.name || ''}」的名称。`;
@@ -745,9 +735,7 @@ const submitAlbumDialog = async () => {
     const res = await fetch(isRename ? `/api/albums/${activeAlbumId.value}` : '/api/albums', {
       method: isRename ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(
-        isRename ? { name } : { name, parent_id: albumDialogMode.value === 'create-child' ? activeAlbumId.value : null },
-      ),
+      body: JSON.stringify(isRename ? { name } : { name, parent_id: albumDialogMode.value === 'create-child' ? activeAlbumId.value : null }),
     });
     const data = await res.json();
     if (!data.success) {
