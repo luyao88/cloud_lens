@@ -38,7 +38,7 @@
           </div>
 
           <div class="tray-list">
-            <div v-for="item in items" :key="item.id" class="tray-item" :class="'is-' + item.upload_status">
+            <div v-for="item in items" :key="item.id" class="tray-item" :class="['is-' + item.upload_status, { 'is-queued': item.upload_status === 'uploading' && !item.xhr }]">
               <div class="tray-thumb">
                 <img v-if="item.upload_type === 'image' && item.upload_blob" :src="item.upload_blob" :alt="item.name" />
                 <video v-else-if="item.upload_type === 'video' && item.upload_blob" :src="item.upload_blob" muted></video>
@@ -49,21 +49,28 @@
                     <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
                   </svg>
                 </span>
-                <span v-if="item.upload_status === 'uploading'" class="thumb-spin">
+                <span v-if="item.upload_status === 'uploading' && item.xhr" class="thumb-spin">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                </span>
+                <span v-else-if="item.upload_status === 'uploading'" class="thumb-queued">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
                   </svg>
                 </span>
               </div>
               <div class="tray-info">
                 <div class="tray-name" :title="item.name">{{ item.name }}</div>
                 <div class="tray-meta">
-                  <template v-if="item.upload_status === 'uploading'">
+                  <template v-if="item.upload_status === 'uploading' && item.xhr">
                     <div class="mini-progress">
                       <div class="mini-progress-fill" :style="{ width: item.upload_progress + '%' }"></div>
                     </div>
                     <span class="meta-pct">{{ item.upload_progress }}%</span>
                   </template>
+                  <span v-else-if="item.upload_status === 'uploading'" class="meta-queued">等待中</span>
                   <span v-else-if="item.upload_status === 'success'" class="meta-ok">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M20 6 9 17l-5-5" />
@@ -127,7 +134,7 @@ import { useToast } from '@/components/ui/toast/use-toast';
 import { useUploadManager, type UploadItem } from '@/composables/useUploadManager';
 
 const { toast } = useToast();
-const { items, nodeHost, retry, removeItem, clearFinished, uploadingCount, errorCount, successCount, hasActive, overallProgress } =
+const { items, nodeHost, retry, removeItem, clearFinished, uploadingCount, queuedCount, errorCount, successCount, hasActive, overallProgress } =
   useUploadManager();
 
 const expanded = ref(false);
@@ -167,12 +174,23 @@ watchEffect(() => {
 });
 
 const summaryText = computed(() => {
-  if (hasActive.value) return `${uploadingCount.value} 个上传中`;
+  if (hasActive.value) {
+    const parts = [`${uploadingCount.value} 个上传中`];
+    if (queuedCount.value > 0) parts.push(`${queuedCount.value} 个排队中`);
+    return parts.join(' · ');
+  }
   if (errorCount.value > 0) return `${successCount.value} 成功 · ${errorCount.value} 失败`;
   return `全部完成 · ${successCount.value} 个`;
 });
 
-const fabTitle = computed(() => (hasActive.value ? `正在上传 ${uploadingCount.value} 个文件（${overallProgress.value}%）` : summaryText.value));
+const fabTitle = computed(() => {
+  if (hasActive.value) {
+    const parts = [`正在上传 ${uploadingCount.value} 个文件（${overallProgress.value}%）`];
+    if (queuedCount.value > 0) parts.push(`${queuedCount.value} 个排队中`);
+    return parts.join(' · ');
+  }
+  return summaryText.value;
+});
 
 const fabBadge = computed(() => {
   if (hasActive.value) return uploadingCount.value;

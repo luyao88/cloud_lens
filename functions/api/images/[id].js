@@ -12,7 +12,9 @@
  *         404 { success: false, error: '图片不存在' }
  *
  * PATCH /api/images/:id，JSON body
- *   { tags: string }  // 标签（逗号分隔，可清空）
+ *   { tags: string, album_id?: number | null }
+ *   // tags：标签（逗号分隔，可清空）
+ *   // album_id：移动到相册（null 为未分组），不传则不修改
  *   响应：200 { success: true, image: {...} }
  */
 import { getUserFromRequest } from '../auth/_utils.js';
@@ -77,21 +79,53 @@ export async function onRequestPatch({ request, env, params }) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const tags = String(body?.tags ?? '').trim().slice(0, 200);
-  if (tags.length >= 200) {
-    return Response.json({ success: false, error: '标签过长' }, { status: 400 });
+
+  // 动态字段更新：tags / album_id 仅在显式传入时修改，避免误清空
+  const sets = [];
+  const binds = [];
+
+  if (body?.tags !== undefined) {
+    const tags = String(body.tags ?? '').trim().slice(0, 200);
+    if (tags.length >= 200) {
+      return Response.json({ success: false, error: '标签过长' }, { status: 400 });
+    }
+    sets.push('tags = ?');
+    binds.push(tags || null);
+  }
+
+  if (body?.album_id !== undefined) {
+    let albumId = null;
+    if (body.album_id !== null) {
+      albumId = Number(body.album_id);
+      if (!Number.isInteger(albumId) || albumId <= 0) {
+        return Response.json({ success: false, error: '无效的相册ID' }, { status: 400 });
+      }
+      const album = await env.cloud_lens_data
+        .prepare('SELECT id FROM albums WHERE id = ? AND user_id = ?')
+        .bind(albumId, user.id)
+        .first();
+      if (!album) {
+        return Response.json({ success: false, error: '相册不存在' }, { status: 404 });
+      }
+    }
+    sets.push('album_id = ?');
+    binds.push(albumId);
+  }
+
+  if (!sets.length) {
+    return Response.json({ success: false, error: '没有需要更新的字段' }, { status: 400 });
   }
 
   const result = await env.cloud_lens_data
-    .prepare('UPDATE images SET tags = ? WHERE id = ? AND user_id = ?')
-    .bind(tags || null, id, user.id)
+    .prepare(`UPDATE images SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`)
+    .bind(...binds, id, user.id)
     .run();
   if (!result.meta.changes) {
     return Response.json({ success: false, error: '图片不存在' }, { status: 404 });
   }
 
   const image = await env.cloud_lens_data
-    .prepare('SELECT id, imgur_id, imgur_url, filename, size, tags, created_at FROM images WHERE id = ?')
+    .prepare('SELECT id, imgur_id, imgur_url, filename, size, tags, album_id, created_at FROM images WHERE id = ?')
     .bind(id)
     .first();
 

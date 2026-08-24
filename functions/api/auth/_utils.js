@@ -78,7 +78,7 @@ export async function getUserFromRequest(request, env) {
     return { user: null, session: null };
   }
 
-  const user = await env.cloud_lens_data.prepare('SELECT id, username, avatar_url, email FROM users WHERE id = ?').bind(session.user_id).first();
+  const user = await env.cloud_lens_data.prepare('SELECT id, username, avatar_url, email, created_at, default_album_id FROM users WHERE id = ?').bind(session.user_id).first();
 
   return { user: user || null, session };
 }

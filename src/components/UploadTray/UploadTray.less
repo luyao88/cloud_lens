@@ -233,6 +233,11 @@
   &.is-error .tray-name {
     color: var(--text-secondary);
   }
+
+  // 排队中：略微降低不透明度区分
+  &.is-queued {
+    opacity: 0.72;
+  }
 }
 
 .tray-thumb {
@@ -285,6 +290,27 @@
       width: 0.65rem;
       height: 0.65rem;
       animation: tray-spin 0.9s linear infinite;
+    }
+  }
+
+  // 排队中的角标（沙漏图标，不转圈）
+  .thumb-queued {
+    position: absolute;
+    right: 0.2rem;
+    bottom: 0.2rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+    color: rgba(148, 163, 184, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    svg {
+      width: 0.6rem;
+      height: 0.6rem;
     }
   }
 }
@@ -356,6 +382,12 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.meta-queued {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .tray-item-actions {

@@ -2,13 +2,13 @@
   <LoadingSplash />
   <Header title="镜云图床 CloudLens" />
   <main>
-    <Transition name="page">
-      <RouterView v-slot="{ Component }" key="$route.path">
+    <RouterView v-slot="{ Component }">
+      <Transition name="page" mode="out-in">
         <keep-alive :include="['Home', 'Legal']">
-          <component :is="Component" />
+          <component :is="Component" :key="$route.path" />
         </keep-alive>
-      </RouterView>
-    </Transition>
+      </Transition>
+    </RouterView>
   </main>
   <Footer />
   <UploadTray />

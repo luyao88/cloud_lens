@@ -7,7 +7,7 @@
  * 注意：上传状态仅在当前会话保持，刷新页面后上传中的项目会丢失，
  * 不会从 localStorage 恢复历史记录，避免误判。
  */
-import { reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch } from 'vue';
 import { useToast } from '@/components/ui/toast/use-toast';
 
 const nodeHost = import.meta.env.VITE_IMG_API_URL || location.origin;
@@ -33,8 +33,76 @@ const items = reactive<UploadItem[]>([]);
 let idCounter = 0;
 const genId = () => `up_${Date.now()}_${idCounter++}_${Math.random().toString(36).slice(2, 6)}`;
 
+// ===== 并发限流队列 =====
+// 浏览器对同一域名最多 6 个并发连接，Imgur 也有每用户每小时 1250 次请求限制。
+// 控制同时上传的请求数，避免大量文件时接口被打满导致排队超时或限流。
+const MAX_CONCURRENT = 3;
+const queue: UploadItem[] = [];
+const activeCount = ref(0);
+
+const toast = useToast().toast;
+
+// ===== 登录态缓存 =====
+// 项目无全局 auth store，Header/Profile 各自 fetch /api/auth/me 并通过
+// window 'auth:changed' 事件同步。这里缓存登录态，未登录时跳过 /api/images 调用，
+// 避免 401 错误污染控制台。auth:changed 时重置缓存以重新探测。
+let authKnown = false;
+let isLoggedIn = false;
+const checkAuth = async (): Promise<boolean> => {
+  if (authKnown) return isLoggedIn;
+  try {
+    const res = await fetch('/api/auth/me');
+    const data = await res.json();
+    isLoggedIn = !!data?.user;
+  } catch {
+    isLoggedIn = false;
+  }
+  authKnown = true;
+  return isLoggedIn;
+};
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth:changed', () => {
+    authKnown = false;
+  });
+}
+
+// ===== 上传目标相册 =====
+// undefined = 跟随默认相册（后端决定）；null = 未分组；number = 指定相册
+// 选择持久化到 localStorage，刷新后保持上次选择
+export type TargetAlbum = number | null | undefined;
+const TARGET_ALBUM_KEY = 'cl_upload_target_album';
+const targetAlbum = ref<TargetAlbum>(undefined);
+
+const loadTargetAlbum = (): TargetAlbum => {
+  try {
+    const raw = localStorage.getItem(TARGET_ALBUM_KEY);
+    if (raw === null) return undefined; // 从未设置 → 跟随默认
+    if (raw === 'none') return null; // 未分组
+    const n = Number(raw);
+    return Number.isInteger(n) && n > 0 ? n : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const setTargetAlbum = (v: TargetAlbum) => {
+  targetAlbum.value = v;
+  try {
+    if (v === undefined) localStorage.removeItem(TARGET_ALBUM_KEY);
+    else if (v === null) localStorage.setItem(TARGET_ALBUM_KEY, 'none');
+    else localStorage.setItem(TARGET_ALBUM_KEY, String(v));
+  } catch {
+    // localStorage 不可用时仅保留内存状态
+  }
+};
+
+if (typeof window !== 'undefined') {
+  targetAlbum.value = loadTargetAlbum();
+}
+
 // 上传成功后保存到服务器（需要登录，未登录静默跳过，不影响上传结果）
-const saveImage = (item: UploadItem) => {
+const saveImage = async (item: UploadItem) => {
+  if (!(await checkAuth())) return;
   fetch('/api/images', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -45,11 +113,11 @@ const saveImage = (item: UploadItem) => {
       filename: item.name,
       size: item.size,
       tags: '',
+      // undefined 时 JSON.stringify 会省略该字段 → 后端归入默认相册
+      ...(targetAlbum.value !== undefined ? { album_id: targetAlbum.value } : {}),
     }),
   }).catch(() => {});
 };
-
-const toast = useToast().toast;
 
 // ===== 单个文件上传（XHR 获得真实上传进度） =====
 const uploadItem = (item: UploadItem) => {
@@ -68,6 +136,7 @@ const uploadItem = (item: UploadItem) => {
   };
   xhr.onload = () => {
     item.xhr = null;
+    finishCurrent();
     let result: any = null;
     try {
       result = JSON.parse(xhr.responseText);
@@ -87,11 +156,33 @@ const uploadItem = (item: UploadItem) => {
   };
   xhr.onerror = () => {
     item.xhr = null;
+    finishCurrent();
     item.upload_status = 'error';
     item.error = '网络异常，连接中断';
     toast({ title: '上传失败', description: `${item.name}：网络异常，连接中断`, variant: 'destructive' });
   };
   xhr.send(formData);
+};
+
+// 当前请求结束后，从队列取出下一个继续上传
+const finishCurrent = () => {
+  activeCount.value--;
+  const next = queue.shift();
+  if (next) {
+    activeCount.value++;
+    uploadItem(next);
+  }
+};
+
+// 入口：先入队列，有空闲 slot 才真正发起请求
+const enqueueUpload = (item: UploadItem) => {
+  if (activeCount.value < MAX_CONCURRENT) {
+    activeCount.value++;
+    uploadItem(item);
+  } else {
+    // 排队中：状态保持 uploading 但进度为 0，UI 上会显示"等待中"遮罩
+    queue.push(item);
+  }
 };
 
 const releaseItem = (item: UploadItem) => {
@@ -110,7 +201,9 @@ const releaseItem = (item: UploadItem) => {
 // ===== 对外接口 =====
 const addFiles = (files: File[]) => {
   files.forEach((file) => {
-    const item: UploadItem = {
+    // 用 reactive 包裹，确保 XHR 回调中修改属性能触发视图更新
+    // 否则 item 是原始对象引用，不经过代理的 set 拦截器，Vue 无法感知变化
+    const item: UploadItem = reactive({
       id: genId(),
       file,
       name: file.name || 'clipboard.png',
@@ -121,20 +214,23 @@ const addFiles = (files: File[]) => {
       upload_type: file.type.startsWith('video/') ? 'video' : 'image',
       upload_result: null,
       xhr: null,
-    };
+    });
     items.unshift(item);
-    uploadItem(item);
+    enqueueUpload(item);
   });
 };
 
 const retry = (id: string) => {
   const item = items.find((i) => i.id === id);
-  if (item?.file && item.upload_status === 'error') uploadItem(item);
+  if (item?.file && item.upload_status === 'error') enqueueUpload(item);
 };
 
 const removeItem = (id: string) => {
   const idx = items.findIndex((i) => i.id === id);
   if (idx === -1) return;
+  // 排队中的项目可能还在 queue 数组里，需要一并移除
+  const qIdx = queue.indexOf(items[idx]);
+  if (qIdx !== -1) queue.splice(qIdx, 1);
   releaseItem(items[idx]);
   items.splice(idx, 1);
 };
@@ -143,6 +239,10 @@ const removeItem = (id: string) => {
 const setItems = (list: UploadItem[]) => {
   const kept = new Set(list);
   items.filter((i) => !kept.has(i)).forEach(releaseItem);
+  // 同步移除队列中被删除的项
+  for (let i = queue.length - 1; i >= 0; i--) {
+    if (!kept.has(queue[i])) queue.splice(i, 1);
+  }
   items.splice(0, items.length, ...list);
 };
 
@@ -153,6 +253,7 @@ const clearFinished = () => {
 
 // ===== 汇总状态（托盘展示用） =====
 const uploadingCount = computed(() => items.filter((i) => i.upload_status === 'uploading').length);
+const queuedCount = computed(() => queue.length);
 const errorCount = computed(() => items.filter((i) => i.upload_status === 'error').length);
 const successCount = computed(() => items.filter((i) => i.upload_status === 'success').length);
 const hasActive = computed(() => uploadingCount.value > 0);
@@ -175,11 +276,14 @@ export const useUploadManager = () => ({
   setItems,
   clearFinished,
   uploadingCount,
+  queuedCount,
   errorCount,
   successCount,
   hasActive,
   hasSuccessUpload,
   overallProgress,
+  targetAlbum,
+  setTargetAlbum,
 });
 
 // ===== 刷新前警告：上传中拦截 beforeunload，避免上传被打断 =====

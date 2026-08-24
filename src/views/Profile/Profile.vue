@@ -12,8 +12,8 @@
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
         </div>
-        <h2>登录后查看您的主页</h2>
-        <p>个人主页展示您的头像、名称与上传相册，仅自己可见</p>
+        <h2>登录后查看您的相册</h2>
+        <p>我的相册展示您的上传图片与视频，仅自己可见</p>
         <button class="gate-btn" @click="authOpen = true">去登录</button>
       </div>
     </div>
@@ -21,11 +21,16 @@
     <template v-else>
       <!-- 个人信息卡 -->
       <div class="profile-card">
-        <div class="profile-info">
-          <img v-if="user.avatar_url" :src="user.avatar_url" :alt="user.username" class="profile-avatar" />
-          <div v-else class="profile-avatar profile-avatar-default">{{ avatarLetter }}</div>
+        <div class="profile-banner"></div>
+        <div class="profile-body">
+          <div class="profile-avatar-wrap">
+            <img v-if="user.avatar_url" :src="user.avatar_url" :alt="user.username" class="profile-avatar" />
+            <div v-else class="profile-avatar profile-avatar-default">{{ avatarLetter }}</div>
+          </div>
           <div class="profile-meta">
-            <h1 class="profile-name">{{ user.username }}</h1>
+            <div class="profile-name-row">
+              <h1 class="profile-name">{{ user.username }}</h1>
+            </div>
             <div class="profile-email-row">
               <p class="profile-email">{{ user.email || '未绑定邮箱' }}</p>
               <span v-if="hasEmailBound" class="verified-badge">
@@ -36,29 +41,162 @@
             <div v-if="user.auth_methods?.length" class="auth-methods">
               <span v-for="m in user.auth_methods" :key="m.provider" class="auth-method-tag">{{ { email: '邮箱', github: 'GitHub', google: 'Google', gitee: 'Gitee' }[m.provider] || m.provider }}</span>
             </div>
-            <button class="bind-email-btn" @click="settingsOpen = true">个人设置</button>
           </div>
-        </div>
-        <div class="profile-stats">
-          <div class="stat">
-            <span class="stat-num">{{ stats.total }}</span>
-            <span class="stat-label">图片</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat">
-            <span class="stat-num">{{ albums.length }}</span>
-            <span class="stat-label">相册</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat">
-            <span class="stat-num">{{ formatSize(stats.totalSize) }}</span>
-            <span class="stat-label">占用空间</span>
+          <div class="profile-stats">
+            <div class="stat">
+              <span class="stat-num">{{ stats.total }}</span>
+              <span class="stat-label">图片</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat">
+              <span class="stat-num">{{ realAlbums.length }}</span>
+              <span class="stat-label">相册</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat">
+              <span class="stat-num">{{ formatSize(stats.totalSize) }}</span>
+              <span class="stat-label">占用空间</span>
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- 实体相册详情视图（真实相册 / 未分组） -->
+      <div v-if="activeAlbumId !== null" class="album-detail">
+        <div class="detail-head">
+          <button class="back-btn" @click="closeRealAlbum">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+            返回相册
+          </button>
+          <div class="detail-title">
+            <h2>{{ currentAlbum ? currentAlbum.name : '未分组' }}</h2>
+            <span>
+              {{ albumImages.length }} 个文件
+              <template v-if="currentAlbum && childAlbums.length"> · {{ childAlbums.length }} 个子相册</template>
+              <template v-if="currentAlbum && currentAlbum.id === defaultAlbumId"> · 默认上传相册</template>
+            </span>
+          </div>
+          <div class="detail-actions">
+            <template v-if="batchMode">
+              <button class="btn ghost" @click="toggleSelectAll">{{ isAllSelected ? '取消全选' : '全选' }}</button>
+              <button class="btn primary" :disabled="!selectedIds.size || moving" @click="openBatchMoveDialog">
+                {{ moving ? '移动中...' : `批量移动 (${selectedIds.size})` }}
+              </button>
+              <button class="btn danger" :disabled="!selectedIds.size || batchDeleting" @click="openBatchDeleteDialog">
+                {{ batchDeleting ? '删除中...' : '批量删除' }}
+              </button>
+              <button class="btn ghost" @click="exitBatchMode">退出</button>
+            </template>
+            <template v-else>
+              <button v-if="currentAlbum" class="btn ghost" :disabled="settingDefault || currentAlbum.id === defaultAlbumId" @click="setDefaultFromDetail">
+                {{ currentAlbum.id === defaultAlbumId ? '已是默认' : '设为默认' }}
+              </button>
+              <button v-if="currentAlbum" class="btn ghost" @click="openAlbumDialog('rename')">重命名</button>
+              <button v-if="currentAlbum" class="btn ghost" @click="openDeleteAlbumDialog">删除相册</button>
+              <button v-if="currentAlbum" class="btn primary" @click="openAlbumDialog('create-child')">＋ 新建子相册</button>
+              <button class="btn ghost" :disabled="!albumImages.length" @click="enterBatchMode">批量管理</button>
+            </template>
+          </div>
+        </div>
+
+        <!-- 面包屑 -->
+        <div v-if="currentAlbum" class="album-breadcrumb">
+          <button class="crumb" @click="closeRealAlbum">我的相册</button>
+          <template v-if="parentAlbum">
+            <span class="crumb-sep">/</span>
+            <button class="crumb" @click="openRealAlbum(parentAlbum.id)">{{ parentAlbum.name }}</button>
+          </template>
+          <span class="crumb-sep">/</span>
+          <span class="crumb current">{{ currentAlbum.name }}</span>
+        </div>
+
+        <!-- 子相册 -->
+        <div v-if="childAlbums.length" class="child-albums">
+          <button v-for="ca in childAlbums" :key="ca.id" class="child-album-card" @click="openRealAlbum(ca.id)">
+            <div class="child-album-cover">
+              <img v-if="ca.cover_url" :src="coverUrl(ca.cover_url)" loading="lazy" :alt="ca.name" />
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="2" />
+                <circle cx="9" cy="9" r="2" />
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+              </svg>
+            </div>
+            <div class="child-album-meta">
+              <span class="child-album-name">{{ ca.name }}</span>
+              <span class="child-album-count">{{ ca.image_count }} 个文件</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- 图片网格 -->
+        <div v-if="albumLoading" class="state-tip">加载中...</div>
+        <div v-else-if="albumImages.length" class="image-grid" :class="{ 'batch-mode': batchMode }">
+          <div class="image-card" :class="{ selected: selectedIds.has(img.id) }" v-for="img in albumImages" :key="img.id">
+            <div class="thumb-wrap" @click="batchMode ? toggleSelect(img) : openPreview(img, albumImages)">
+              <video v-if="isVideo(img)" class="thumb" :src="fileUrl(img)" muted preload="metadata" playsinline @loadeddata="onThumbLoad"></video>
+              <img v-else class="thumb" :src="fileUrl(img)" loading="lazy" :alt="img.filename || ''" @load="onThumbLoad" />
+              <span v-if="isVideo(img)" class="video-badge">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                视频
+              </span>
+              <div v-if="batchMode" class="select-checkbox" :class="{ checked: selectedIds.has(img.id) }" @click.stop>
+                <svg v-if="selectedIds.has(img.id)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+              <div v-else class="thumb-actions" @click.stop>
+                <button class="action-btn" title="复制链接" @click="copyLink(img)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                </button>
+                <button class="action-btn" title="移动到相册" @click="openMoveDialog(img)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 4h16v16H4z" />
+                    <path d="M4 4v7h16" />
+                    <path d="M12 12v6" />
+                    <path d="m9 15 3-3 3 3" />
+                  </svg>
+                </button>
+                <button
+                  v-if="currentAlbum"
+                  class="action-btn star-btn"
+                  :class="{ active: currentAlbum.cover_image_id === img.id }"
+                  :title="currentAlbum.cover_image_id === img.id ? '取消相册封面' : '设为相册封面'"
+                  @click="setCoverImage(img)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                </button>
+                <button class="action-btn danger" title="删除" @click="openDeleteDialog(img)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="image-caption">
+              <p class="caption-name" :title="img.filename || ''">{{ img.filename || '未命名' }}</p>
+              <p class="caption-meta">
+                <span v-if="tagList(img).length" class="caption-tags">
+                  <span class="tag" v-for="t in tagList(img)" :key="t">{{ t }}</span>
+                </span>
+                <span>{{ formatDate(img) }} · {{ formatSize(img.size) }}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div v-else class="state-tip">
+          {{ currentAlbum ? '该相册暂无图片，' : '暂无未分组图片，' }}<router-link to="/" class="link">去上传</router-link>
+        </div>
+      </div>
+
       <!-- 相册详情视图 -->
-      <div v-if="activeAlbum" class="album-detail">
+      <div v-else-if="activeAlbum" class="album-detail">
         <div class="detail-head">
           <button
             class="back-btn"
@@ -81,13 +219,19 @@
               <button class="btn ghost" @click="toggleSelectAll">
                 {{ isAllSelected ? '取消全选' : '全选' }}
               </button>
-              <button class="btn primary" :disabled="!selectedIds.size || batchSaving" @click="openBatchDialog">
+              <button class="btn primary" :disabled="!selectedIds.size || moving" @click="openBatchMoveDialog">
+                {{ moving ? '移动中...' : `批量移动 (${selectedIds.size})` }}
+              </button>
+              <button class="btn ghost" :disabled="!selectedIds.size || batchSaving" @click="openBatchDialog">
                 {{ batchSaving ? '保存中...' : `批量编辑标签 (${selectedIds.size})` }}
+              </button>
+              <button class="btn danger" :disabled="!selectedIds.size || batchDeleting" @click="openBatchDeleteDialog">
+                {{ batchDeleting ? '删除中...' : '批量删除' }}
               </button>
               <button class="btn ghost" @click="exitBatchMode">退出</button>
             </template>
             <template v-else>
-              <button class="btn ghost" :disabled="!activeAlbum.images.length" @click="enterBatchMode">批量编辑标签</button>
+              <button class="btn ghost" :disabled="!activeAlbum.images.length" @click="enterBatchMode">批量管理</button>
             </template>
           </div>
         </div>
@@ -95,8 +239,8 @@
         <div v-if="activeAlbum.images.length" class="image-grid" :class="{ 'batch-mode': batchMode }">
           <div class="image-card" :class="{ selected: selectedIds.has(img.id) }" v-for="img in activeAlbum.images" :key="img.id">
             <div class="thumb-wrap" @click="batchMode ? toggleSelect(img) : openPreview(img)">
-              <video v-if="isVideo(img)" class="thumb" :src="fileUrl(img)" muted preload="metadata" playsinline></video>
-              <img v-else class="thumb" :src="fileUrl(img)" loading="lazy" :alt="img.filename || ''" />
+              <video v-if="isVideo(img)" class="thumb" :src="fileUrl(img)" muted preload="metadata" playsinline @loadeddata="onThumbLoad"></video>
+              <img v-else class="thumb" :src="fileUrl(img)" loading="lazy" :alt="img.filename || ''" @load="onThumbLoad" />
               <span v-if="isVideo(img)" class="video-badge">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                 视频
@@ -111,6 +255,14 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                </button>
+                <button class="action-btn" title="移动到相册" @click="openMoveDialog(img)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 4h16v16H4z" />
+                    <path d="M4 4v7h16" />
+                    <path d="M12 12v6" />
+                    <path d="m9 15 3-3 3 3" />
                   </svg>
                 </button>
                 <button class="action-btn" title="编辑标签" @click="openTagDialog(img)">
@@ -142,33 +294,96 @@
 
       <!-- 相册列表视图 -->
       <template v-else>
+        <div class="albums-head">
+          <h2 class="albums-title">我的相册</h2>
+        </div>
         <div class="tabs">
+          <button class="tab" :class="{ active: groupMode === 'album' }" @click="groupMode = 'album'">我的相册</button>
           <button class="tab" :class="{ active: groupMode === 'time' }" @click="groupMode = 'time'">按时间</button>
           <button class="tab" :class="{ active: groupMode === 'tag' }" @click="groupMode = 'tag'">按标签</button>
         </div>
 
-        <div v-if="albums.length" class="album-grid">
-          <div class="album-card" v-for="album in albums" :key="album.key" @click="activeKey = album.key">
-            <div class="cover-stack" :class="`cover-count-${Math.min(album.images.length, 3)}`">
-              <div class="cover-item" v-for="img in album.images.slice(0, 3)" :key="img.id">
-                <video v-if="isVideo(img)" class="cover-media" :src="fileUrl(img)" muted preload="metadata" playsinline></video>
-                <img v-else class="cover-media" :src="fileUrl(img)" loading="lazy" :alt="album.name" />
+        <!-- 实体相册网格 -->
+        <template v-if="groupMode === 'album'">
+          <div class="real-album-grid">
+            <button class="real-album-card is-new" @click="openAlbumDialog('create')">
+              <div class="real-album-cover is-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                  <circle cx="9" cy="9" r="2" />
+                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                  <path d="M18 3v6" />
+                  <path d="M15 6h6" />
+                </svg>
               </div>
-              <span class="cover-badge">{{ album.images.length }}</span>
-            </div>
-            <div class="album-info">
-              <p class="album-name" :title="album.name">{{ album.name }}</p>
-              <p class="album-meta">{{ album.images.length }} 个文件 · {{ formatSize(albumSize(album)) }}</p>
+              <div class="real-album-info">
+                <p class="real-album-name">新建相册</p>
+                <p class="real-album-meta">创建相册整理图片</p>
+              </div>
+            </button>
+            <button v-for="a in topLevelAlbums" :key="a.id" class="real-album-card" @click="openRealAlbum(a.id)">
+              <div class="real-album-cover">
+                <img v-if="a.cover_url" class="cover-img" :src="coverUrl(a.cover_url)" loading="lazy" :alt="a.name" @load="onThumbLoad" />
+                <div v-else class="is-empty">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="18" height="18" x="3" y="3" rx="2" />
+                    <circle cx="9" cy="9" r="2" />
+                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                  </svg>
+                </div>
+                <span v-if="a.id === defaultAlbumId" class="default-album-badge">默认</span>
+              </div>
+              <div class="real-album-info">
+                <p class="real-album-name" :title="a.name">{{ a.name }}</p>
+                <p class="real-album-meta">
+                  {{ a.image_count }} 个文件<template v-if="childCount(a.id)"> · {{ childCount(a.id) }} 个子相册</template>
+                </p>
+              </div>
+            </button>
+            <button class="real-album-card" @click="openRealAlbum(0)">
+              <div class="real-album-cover is-empty is-ungrouped">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 7h.01" />
+                  <path d="M7 13v.01" />
+                  <rect width="18" height="18" x="3" y="3" rx="2" />
+                  <path d="M21 8v8a2 2 0 0 1-2 2h-6.83" />
+                  <path d="m9 11 1.5 1.5" />
+                  <path d="m13 9 2.5 2.5" />
+                </svg>
+              </div>
+              <div class="real-album-info">
+                <p class="real-album-name">未分组</p>
+                <p class="real-album-meta">{{ ungroupedCount }} 个文件</p>
+              </div>
+            </button>
+          </div>
+        </template>
+
+        <!-- 按时间 / 按标签分组网格 -->
+        <template v-else>
+          <div v-if="albums.length" class="album-grid">
+            <div class="album-card" v-for="album in albums" :key="album.key" @click="activeKey = album.key">
+              <div class="cover-stack" :class="`cover-count-${Math.min(album.images.length, 3)}`">
+                <div class="cover-item" v-for="img in album.images.slice(0, 3)" :key="img.id">
+                  <video v-if="isVideo(img)" class="cover-media" :src="fileUrl(img)" muted preload="metadata" playsinline></video>
+                  <img v-else class="cover-media" :src="fileUrl(img)" loading="lazy" :alt="album.name" />
+                </div>
+                <span class="cover-badge">{{ album.images.length }}</span>
+              </div>
+              <div class="album-info">
+                <p class="album-name" :title="album.name">{{ album.name }}</p>
+                <p class="album-meta">{{ album.images.length }} 个文件 · {{ formatSize(albumSize(album)) }}</p>
+              </div>
             </div>
           </div>
-        </div>
-        <div v-else class="state-tip">暂无上传记录，<router-link to="/" class="link">去上传</router-link> 第一张图片吧</div>
+          <div v-else class="state-tip">暂无上传记录，<router-link to="/" class="link">去上传</router-link> 第一张图片吧</div>
 
-        <div v-if="hasMore" class="load-more">
-          <button class="load-more-btn" :disabled="loadingMore" @click="loadMore">
-            {{ loadingMore ? '加载中...' : '加载更多' }}
-          </button>
-        </div>
+          <div v-if="hasMore" class="load-more">
+            <button class="load-more-btn" :disabled="loadingMore" @click="loadMore">
+              {{ loadingMore ? '加载中...' : '加载更多' }}
+            </button>
+          </div>
+        </template>
       </template>
     </template>
 
@@ -219,538 +434,86 @@
       </DialogContent>
     </Dialog>
 
-    <!-- 个人设置弹窗 -->
-    <Dialog :open="settingsOpen" @update:open="(v) => (settingsOpen = v)">
-      <DialogContent class="max-w-md" @pointer-down-outside.prevent @escape-key-down.prevent>
-        <!-- Tab 切换 -->
-        <div class="settings-tabs">
-          <button v-if="hasEmailBound" class="settings-tab" :class="{ active: settingsTab === 'password' }" @click="settingsTab = 'password'">修改密码</button>
-          <button v-if="hasEmailBound" class="settings-tab" :class="{ active: settingsTab === 'forgot' }" @click="settingsTab = 'forgot'">找回密码</button>
-          <button class="settings-tab" :class="{ active: settingsTab === 'email' }" @click="settingsTab = 'email'">{{ hasEmailBound ? '更换邮箱' : '绑定邮箱' }}</button>
+    <!-- 新建/重命名相册弹窗 -->
+    <Dialog :open="albumDialogOpen" @update:open="(v: boolean) => (albumDialogOpen = v)">
+      <DialogContent class="max-w-md">
+        <div class="flex flex-col gap-1.5 text-center">
+          <DialogTitle>{{ albumDialogTitle }}</DialogTitle>
+          <DialogDescription>{{ albumDialogDesc }}</DialogDescription>
         </div>
+        <input v-model="albumNameInput" class="dialog-input" type="text" placeholder="请输入相册名称（最多 50 字）" maxlength="50" @keyup.enter="submitAlbumDialog" />
+        <div class="dialog-footer">
+          <button class="btn ghost" @click="albumDialogOpen = false">取消</button>
+          <button class="btn primary" :disabled="albumSubmitting" @click="submitAlbumDialog">
+            {{ albumSubmitting ? '保存中...' : albumDialogMode === 'rename' ? '保存' : '创建' }}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
 
-        <!-- 修改密码 / 找回密码 -->
-        <template v-if="settingsTab === 'password' || settingsTab === 'forgot'">
-          <!-- 子模式切换（仅修改密码 tab） -->
-          <div v-if="settingsTab === 'password'" class="pwd-mode-toggle">
-            <button class="pwd-mode-btn" :class="{ active: pwdMode === 'old' }" @click="pwdMode = 'old'">通过旧密码修改</button>
-            <button class="pwd-mode-btn" :class="{ active: pwdMode === 'reset' }" @click="pwdMode = 'reset'">忘记旧密码</button>
-          </div>
+    <!-- 删除相册确认弹窗 -->
+    <Dialog :open="deleteAlbumOpen" @update:open="(v: boolean) => (deleteAlbumOpen = v)">
+      <DialogContent class="max-w-md">
+        <div class="flex flex-col gap-1.5 text-center">
+          <DialogTitle>删除相册</DialogTitle>
+          <DialogDescription> 确定删除「{{ currentAlbum?.name }}」吗？相册内的图片将移入未分组，子相册将提升为顶级相册，此操作不可恢复。 </DialogDescription>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn ghost" @click="deleteAlbumOpen = false">取消</button>
+          <button class="btn danger" :disabled="deletingAlbum" @click="confirmDeleteAlbum">{{ deletingAlbum ? '删除中...' : '确认删除' }}</button>
+        </div>
+      </DialogContent>
+    </Dialog>
 
-          <!-- 模式 1：旧密码修改 -->
-          <form v-if="settingsTab === 'password' && pwdMode === 'old'" class="bind-form" @submit.prevent="submitChangePassword">
-            <label class="bind-field">
-              <input v-model="changePwd.current" :type="showPwd['cur'] ? 'text' : 'password'" class="bind-input" placeholder="当前密码" required />
-              <button type="button" class="pwd-toggle" @click="showPwd['cur'] = !showPwd['cur']">
-                <svg v-if="showPwd['cur']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                  <line x1="2" x2="22" y1="2" y2="22" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-            </label>
-            <label class="bind-field">
-              <input v-model="changePwd.next" :type="showPwd['new'] ? 'text' : 'password'" class="bind-input" placeholder="新密码（至少 6 位）" required />
-              <button type="button" class="pwd-toggle" @click="showPwd['new'] = !showPwd['new']">
-                <svg v-if="showPwd['new']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                  <line x1="2" x2="22" y1="2" y2="22" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-            </label>
-            <label class="bind-field">
-              <input v-model="changePwd.confirm" :type="showPwd['cfm'] ? 'text' : 'password'" class="bind-input" placeholder="确认新密码" required />
-              <button type="button" class="pwd-toggle" @click="showPwd['cfm'] = !showPwd['cfm']">
-                <svg v-if="showPwd['cfm']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                  <line x1="2" x2="22" y1="2" y2="22" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-            </label>
-            <button type="submit" class="bind-submit" :disabled="changePwd.submitting">
-              <span v-if="!changePwd.submitting">确认修改</span>
-              <span v-else class="bind-loading-dot"></span>
-            </button>
-          </form>
+    <!-- 移动到相册弹窗 -->
+    <Dialog :open="moveOpen" @update:open="(v: boolean) => (moveOpen = v)">
+      <DialogContent class="max-w-md">
+        <div class="flex flex-col gap-1.5 text-center">
+          <DialogTitle>移动到相册</DialogTitle>
+          <DialogDescription>
+            <template v-if="moveTargetIds.length > 1">将选中的 {{ moveTargetIds.length }} 张图片移动到指定相册</template>
+            <template v-else>将「{{ moveTargetName }}」移动到指定相册</template>
+          </DialogDescription>
+        </div>
+        <select v-model="moveAlbumValue" class="dialog-input">
+          <option value="none">未分组</option>
+          <option v-for="opt in albumTreeOptions" :key="opt.id" :value="String(opt.id)">{{ opt.label }}</option>
+        </select>
+        <div class="dialog-footer">
+          <button class="btn ghost" @click="moveOpen = false">取消</button>
+          <button class="btn primary" :disabled="moving" @click="confirmMove">{{ moving ? '移动中...' : '移动' }}</button>
+        </div>
+      </DialogContent>
+    </Dialog>
 
-          <!-- 模式 2：邮箱验证码修改 -->
-          <form v-else class="bind-form" @submit.prevent="submitResetPassword">
-            <p class="bind-hint">
-              验证码将发送至 <strong>{{ user?.email }}</strong>
-            </p>
-            <div class="pwd-code-row">
-              <label class="bind-field pwd-code-field">
-                <input v-model="changePwd.code" type="text" inputmode="numeric" maxlength="6" class="bind-input" placeholder="验证码" required />
-              </label>
-              <button type="button" class="pwd-send-btn" :disabled="changePwd.countdown > 0 || changePwd.sending" @click="sendPwdCode">
-                {{ changePwd.countdown > 0 ? `${changePwd.countdown}s` : '发送验证码' }}
-              </button>
-            </div>
-            <label class="bind-field">
-              <input v-model="changePwd.next" :type="showPwd['rnew'] ? 'text' : 'password'" class="bind-input" placeholder="新密码（至少 6 位）" required />
-              <button type="button" class="pwd-toggle" @click="showPwd['rnew'] = !showPwd['rnew']">
-                <svg v-if="showPwd['rnew']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                  <line x1="2" x2="22" y1="2" y2="22" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-            </label>
-            <label class="bind-field">
-              <input v-model="changePwd.confirm" :type="showPwd['rcfm'] ? 'text' : 'password'" class="bind-input" placeholder="确认新密码" required />
-              <button type="button" class="pwd-toggle" @click="showPwd['rcfm'] = !showPwd['rcfm']">
-                <svg v-if="showPwd['rcfm']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                  <line x1="2" x2="22" y1="2" y2="22" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-            </label>
-            <button type="submit" class="bind-submit" :disabled="changePwd.submitting">
-              <span v-if="!changePwd.submitting">确认重置</span>
-              <span v-else class="bind-loading-dot"></span>
-            </button>
-          </form>
-        </template>
-
-        <!-- 绑定/更换邮箱 -->
-        <template v-else>
-          <div v-if="hasEmailBound" class="bind-current-email">
-            当前邮箱：<strong>{{ user?.email }}</strong>
-          </div>
-          <div class="bind-steps">
-            <div class="bind-step-item" :class="{ active: bindStep === 'email', done: bindStep === 'code' }">
-              <span class="bind-step-num">1</span>
-              <span class="bind-step-label">{{ hasEmailBound ? '新邮箱' : '输入邮箱' }}</span>
-            </div>
-            <div class="bind-step-line" :class="{ done: bindStep === 'code' }"></div>
-            <div class="bind-step-item" :class="{ active: bindStep === 'code' }">
-              <span class="bind-step-num">2</span>
-              <span class="bind-step-label">{{ hasEmailBound ? '验证并确认' : '验证并设置密码' }}</span>
-            </div>
-          </div>
-
-          <Transition name="bind-slide" mode="out-in">
-            <form v-if="bindStep === 'email'" key="email" class="bind-form" @submit.prevent="startBindEmail">
-              <p class="bind-hint">{{ hasEmailBound ? '输入新邮箱地址，将发送验证码进行确认' : '绑定邮箱后可使用邮箱密码登录本账号' }}</p>
-              <label class="bind-field">
-                <input ref="emailInputRef" v-model="bindEmail" type="email" class="bind-input" :placeholder="hasEmailBound ? '请输入新邮箱地址' : '请输入邮箱地址'" required />
-              </label>
-              <button type="submit" class="bind-submit" :disabled="bindSubmitting">
-                <span v-if="!bindSubmitting">发送验证码</span>
-                <span v-else class="bind-loading-dot"></span>
-              </button>
-            </form>
-
-            <form v-else key="code" class="bind-form" @submit.prevent="confirmBindEmail">
-              <p class="bind-hint">
-                验证码已发送至 <strong>{{ bindEmail }}</strong>
-                <a class="bind-change-email" @click="bindStep = 'email'">更换</a>
-              </p>
-              <label class="bind-field">
-                <input ref="codeInputRef" v-model="bindCode" type="text" inputmode="numeric" maxlength="6" class="bind-input bind-code-input" placeholder="输入 6 位验证码" required />
-              </label>
-              <div class="bind-resend-row">
-                <button type="button" class="bind-resend" :disabled="bindCountdown > 0" @click="resendCode">
-                  {{ bindCountdown > 0 ? `${bindCountdown}s 后可重发` : '重新发送验证码' }}
-                </button>
-              </div>
-              <!-- 更换邮箱：输入当前密码验证身份；首次绑定：设置密码 -->
-              <label v-if="hasEmailBound" class="bind-field">
-                <input v-model="bindCurrentPassword" :type="showPwd['bcur'] ? 'text' : 'password'" class="bind-input" placeholder="当前密码（验证身份）" required />
-                <button type="button" class="pwd-toggle" @click="showPwd['bcur'] = !showPwd['bcur']">
-                  <svg v-if="showPwd['bcur']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                    <line x1="2" x2="22" y1="2" y2="22" />
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
-              </label>
-              <label v-else class="bind-field">
-                <input v-model="bindPassword" :type="showPwd['bnew'] ? 'text' : 'password'" class="bind-input" placeholder="设置登录密码（至少 6 位）" required />
-                <button type="button" class="pwd-toggle" @click="showPwd['bnew'] = !showPwd['bnew']">
-                  <svg v-if="showPwd['bnew']" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                    <line x1="2" x2="22" y1="2" y2="22" />
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
-              </label>
-              <button type="submit" class="bind-submit" :disabled="bindSubmitting">
-                <span v-if="!bindSubmitting">{{ hasEmailBound ? '确认更换' : '确认绑定' }}</span>
-                <span v-else class="bind-loading-dot"></span>
-              </button>
-            </form>
-          </Transition>
-        </template>
+    <!-- 批量删除确认弹窗 -->
+    <Dialog :open="batchDeleteOpen" @update:open="(v: boolean) => (batchDeleteOpen = v)">
+      <DialogContent class="max-w-md">
+        <div class="flex flex-col gap-1.5 text-center">
+          <DialogTitle>批量删除</DialogTitle>
+          <DialogDescription> 确定删除选中的 {{ selectedIds.size }} 张图片吗？删除后将同时移除云端源文件与上传记录，不可恢复。 </DialogDescription>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn ghost" @click="batchDeleteOpen = false">取消</button>
+          <button class="btn danger" :disabled="batchDeleting" @click="confirmBatchDelete">{{ batchDeleting ? '删除中...' : '确认删除' }}</button>
+        </div>
       </DialogContent>
     </Dialog>
   </section>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast/use-toast';
 
 const { toast } = useToast();
 
-// ===== 个人设置 =====
-const settingsOpen = ref(false);
-const settingsTab = ref<'password' | 'email' | 'forgot'>('password');
-
-// 修改密码
-const pwdMode = ref<'old' | 'reset'>('old');
-const showPwd = ref<Record<string, boolean>>({});
-const changePwd = ref({ current: '', next: '', confirm: '', code: '', token: '', submitting: false, sending: false, countdown: 0 });
-let pwdCountdownTimer: number | null = null;
-
-// 绑定/更换邮箱
-const bindEmail = ref('');
-const bindPassword = ref('');
-const bindCurrentPassword = ref('');
-const bindCode = ref('');
-const bindStep = ref<'email' | 'code'>('email');
-const bindSubmitting = ref(false);
-const bindToken = ref('');
-const bindCountdown = ref(0);
-const emailInputRef = ref<HTMLInputElement | null>(null);
-const codeInputRef = ref<HTMLInputElement | null>(null);
-let countdownTimer: number | null = null;
-
-const startCountdown = () => {
-  bindCountdown.value = 60;
-  if (countdownTimer) clearInterval(countdownTimer);
-  countdownTimer = window.setInterval(() => {
-    bindCountdown.value--;
-    if (bindCountdown.value <= 0) {
-      if (countdownTimer) clearInterval(countdownTimer);
-      countdownTimer = null;
-    }
-  }, 1000);
-};
-
-const focusInput = () => {
-  nextTick(() => {
-    if (bindStep.value === 'email') {
-      emailInputRef.value?.focus();
-    } else {
-      codeInputRef.value?.focus();
-    }
-  });
-};
-
-watch(settingsOpen, (open) => {
-  if (open) {
-    settingsTab.value = hasEmailBound.value ? 'password' : 'email';
-    pwdMode.value = 'old';
-    bindStep.value = 'email';
-    focusInput();
-  } else {
-    // 关闭时重置所有状态
-    bindEmail.value = '';
-    bindPassword.value = '';
-    bindCurrentPassword.value = '';
-    bindCode.value = '';
-    bindStep.value = 'email';
-    bindCountdown.value = 0;
-    pwdMode.value = 'old';
-    showPwd.value = {};
-    changePwd.value = { current: '', next: '', confirm: '', code: '', token: '', submitting: false, sending: false, countdown: 0 };
-    if (countdownTimer) {
-      clearInterval(countdownTimer);
-      countdownTimer = null;
-    }
-    if (pwdCountdownTimer) {
-      clearInterval(pwdCountdownTimer);
-      pwdCountdownTimer = null;
-    }
-  }
-});
-
-watch(bindStep, () => focusInput());
-
-async function startBindEmail() {
-  if (!bindEmail.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bindEmail.value)) {
-    toast({ title: '邮箱格式不正确', variant: 'destructive' });
-    return;
-  }
-  bindSubmitting.value = true;
-  try {
-    const res = await fetch('/api/auth/send-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: bindEmail.value, purpose: 'bind-email' }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      toast({ title: '发送失败', description: data.error || '', variant: 'destructive' });
-      return;
-    }
-    bindStep.value = 'code';
-    startCountdown();
-  } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
-  } finally {
-    bindSubmitting.value = false;
-  }
-}
-
-async function resendCode() {
-  bindSubmitting.value = true;
-  try {
-    const res = await fetch('/api/auth/send-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: bindEmail.value, purpose: 'bind-email' }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      toast({ title: '发送失败', description: data.error || '', variant: 'destructive' });
-      return;
-    }
-    toast({ title: '验证码已重新发送' });
-    startCountdown();
-  } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
-  } finally {
-    bindSubmitting.value = false;
-  }
-}
-
-async function logoutAndRedirect() {
-  try {
-    await fetch('/api/auth/logout', { method: 'POST' });
-  } catch {}
-  user.value = null;
-  // 通知 Header 等组件同步登出状态
-  window.dispatchEvent(new Event('auth:changed'));
-  authOpen.value = true;
-}
-
 /** 登录成功后刷新本页并通知 Header 同步 */
 async function onLoginSuccess() {
   await init();
   window.dispatchEvent(new Event('auth:changed'));
 }
-
-async function submitChangePassword() {
-  if (changePwd.value.current.length < 6) {
-    toast({ title: '请输入当前密码', variant: 'destructive' });
-    return;
-  }
-  if (changePwd.value.next.length < 6) {
-    toast({ title: '新密码至少 6 位', variant: 'destructive' });
-    return;
-  }
-  if (changePwd.value.next !== changePwd.value.confirm) {
-    toast({ title: '两次密码不一致', variant: 'destructive' });
-    return;
-  }
-  if (changePwd.value.next === changePwd.value.current) {
-    toast({ title: '新密码不能与旧密码一致', variant: 'destructive' });
-    return;
-  }
-  changePwd.value.submitting = true;
-  try {
-    const res = await fetch('/api/auth/change-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ current_password: changePwd.value.current, new_password: changePwd.value.next }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      toast({ title: '修改失败', description: data.error || '', variant: 'destructive' });
-      return;
-    }
-    toast({ title: '密码修改成功，请重新登录' });
-    settingsOpen.value = false;
-    await logoutAndRedirect();
-    return;
-  } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
-  } finally {
-    changePwd.value.submitting = false;
-  }
-}
-
-async function sendPwdCode() {
-  if (!user.value?.email) {
-    toast({ title: '当前账号未绑定邮箱', variant: 'destructive' });
-    return;
-  }
-  changePwd.value.sending = true;
-  try {
-    const res = await fetch('/api/auth/send-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.value.email, purpose: 'reset' }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      toast({ title: '发送失败', description: data.error || '', variant: 'destructive' });
-      return;
-    }
-    toast({ title: '验证码已发送' });
-    changePwd.value.countdown = 60;
-    if (pwdCountdownTimer) clearInterval(pwdCountdownTimer);
-    pwdCountdownTimer = window.setInterval(() => {
-      changePwd.value.countdown--;
-      if (changePwd.value.countdown <= 0) {
-        if (pwdCountdownTimer) clearInterval(pwdCountdownTimer);
-        pwdCountdownTimer = null;
-      }
-    }, 1000);
-  } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
-  } finally {
-    changePwd.value.sending = false;
-  }
-}
-
-async function submitResetPassword() {
-  if (changePwd.value.code.length !== 6) {
-    toast({ title: '请输入 6 位验证码', variant: 'destructive' });
-    return;
-  }
-  if (changePwd.value.next.length < 6) {
-    toast({ title: '新密码至少 6 位', variant: 'destructive' });
-    return;
-  }
-  if (changePwd.value.next !== changePwd.value.confirm) {
-    toast({ title: '两次密码不一致', variant: 'destructive' });
-    return;
-  }
-  changePwd.value.submitting = true;
-  try {
-    // 先验证码换 token
-    const verifyRes = await fetch('/api/auth/verify-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.value!.email, code: changePwd.value.code, purpose: 'reset' }),
-    });
-    const verifyData = await verifyRes.json();
-    if (!verifyData.success) {
-      toast({ title: '验证失败', description: verifyData.error || '', variant: 'destructive' });
-      return;
-    }
-    changePwd.value.token = verifyData.token;
-    // 重置密码
-    const resetRes = await fetch('/api/auth/reset-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.value!.email, password: changePwd.value.next, token: changePwd.value.token }),
-    });
-    const resetData = await resetRes.json();
-    if (!resetData.success) {
-      toast({ title: '重置失败', description: resetData.error || '', variant: 'destructive' });
-      return;
-    }
-    toast({ title: '密码重置成功，请重新登录' });
-    settingsOpen.value = false;
-    await logoutAndRedirect();
-    return;
-  } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
-  } finally {
-    changePwd.value.submitting = false;
-  }
-}
-
-async function confirmBindEmail() {
-  if (bindCode.value.length !== 6) {
-    toast({ title: '请输入 6 位验证码', variant: 'destructive' });
-    return;
-  }
-  if (hasEmailBound.value && bindCurrentPassword.value.length < 6) {
-    toast({ title: '请输入当前密码', variant: 'destructive' });
-    return;
-  }
-  if (!hasEmailBound.value && bindPassword.value.length < 6) {
-    toast({ title: '密码至少 6 位', variant: 'destructive' });
-    return;
-  }
-  bindSubmitting.value = true;
-  try {
-    // 先验证码换 token
-    const verifyRes = await fetch('/api/auth/verify-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: bindEmail.value, code: bindCode.value, purpose: 'bind-email' }),
-    });
-    const verifyData = await verifyRes.json();
-    if (!verifyData.success) {
-      toast({ title: '验证失败', description: verifyData.error || '', variant: 'destructive' });
-      return;
-    }
-    bindToken.value = verifyData.token;
-    // 再绑定/更换
-    const bindRes = await fetch('/api/auth/bind-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: bindEmail.value,
-        password: hasEmailBound.value ? undefined : bindPassword.value,
-        token: bindToken.value,
-        current_password: hasEmailBound.value ? bindCurrentPassword.value : undefined,
-      }),
-    });
-    const bindData = await bindRes.json();
-    if (!bindData.success) {
-      toast({ title: hasEmailBound.value ? '更换失败' : '绑定失败', description: bindData.error || '', variant: 'destructive' });
-      return;
-    }
-    toast({ title: hasEmailBound.value ? '邮箱更换成功' : '邮箱绑定成功' });
-    settingsOpen.value = false;
-    await fetchUser();
-  } catch (err) {
-    toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
-  } finally {
-    bindSubmitting.value = false;
-  }
-}
-
-onUnmounted(() => {
-  if (countdownTimer) clearInterval(countdownTimer);
-  if (pwdCountdownTimer) clearInterval(pwdCountdownTimer);
-});
 
 // 图片记录（与 /api/images 返回字段一致）
 interface ImageRecord {
@@ -760,6 +523,7 @@ interface ImageRecord {
   filename: string | null;
   size: number | null;
   tags: string | null;
+  album_id?: number | null;
   created_at: string;
 }
 
@@ -768,6 +532,17 @@ interface Album {
   key: string;
   name: string;
   images: ImageRecord[];
+}
+
+// 实体相册（数据库 albums 表记录）
+interface RealAlbum {
+  id: number;
+  name: string;
+  parent_id: number | null;
+  cover_image_id: number | null;
+  image_count: number;
+  cover_url: string | null;
+  created_at: string;
 }
 
 const PAGE_SIZE = 100;
@@ -783,9 +558,18 @@ const user = ref<{ username: string; avatar_url: string | null; email: string | 
 const authOpen = ref(false);
 const images = ref<ImageRecord[]>([]);
 const stats = ref<{ total: number; totalSize: number }>({ total: 0, totalSize: 0 });
-const groupMode = ref<'time' | 'tag'>('time');
+const groupMode = ref<'album' | 'time' | 'tag'>('album');
 const activeKey = ref('');
 const loadingMore = ref(false);
+
+// ===== 实体相册 =====
+const realAlbums = ref<RealAlbum[]>([]);
+const ungroupedCount = ref(0);
+const defaultAlbumId = ref<number | null>(null);
+// null=列表视图；数字=相册详情；0=未分组详情
+const activeAlbumId = ref<number | null>(null);
+const albumImages = ref<ImageRecord[]>([]);
+const albumLoading = ref(false);
 
 const avatarLetter = computed(() => (user.value?.username || '?')[0].toUpperCase());
 const hasEmailBound = computed(() => user.value?.auth_methods?.some((m) => m.provider === 'email') ?? false);
@@ -793,6 +577,8 @@ const hasEmailBound = computed(() => user.value?.auth_methods?.some((m) => m.pro
 // ===== 工具函数 =====
 const fileKey = (img: ImageRecord) => img.imgur_url.split('/').pop() || '';
 const fileUrl = (img: ImageRecord) => `${nodeHost}/v2/${fileKey(img)}`;
+// 相册封面 URL（cover_url 是 imgur 链接，同样走 /v2 代理）
+const coverUrl = (url: string) => `${nodeHost}/v2/${url.split('/').pop() || ''}`;
 const isVideo = (img: ImageRecord) => VIDEO_RE.test(fileKey(img));
 const formatDate = (img: ImageRecord) => (img.created_at || '').slice(0, 10);
 const tagList = (img: ImageRecord) =>
@@ -846,6 +632,13 @@ const albums = computed<Album[]>(() => {
 const activeAlbum = computed(() => (activeKey.value ? albums.value.find((a) => a.key === activeKey.value) || null : null));
 const hasMore = computed(() => images.value.length < stats.value.total);
 
+// ===== 实体相册派生状态 =====
+const topLevelAlbums = computed(() => realAlbums.value.filter((a) => !a.parent_id));
+const childCount = (albumId: number) => realAlbums.value.filter((a) => a.parent_id === albumId).length;
+const currentAlbum = computed(() => (activeAlbumId.value && activeAlbumId.value > 0 ? realAlbums.value.find((a) => a.id === activeAlbumId.value) || null : null));
+const parentAlbum = computed(() => (currentAlbum.value?.parent_id ? realAlbums.value.find((a) => a.id === currentAlbum.value!.parent_id) || null : null));
+const childAlbums = computed(() => realAlbums.value.filter((a) => a.parent_id === activeAlbumId.value));
+
 // ===== 数据加载 =====
 const fetchUser = async () => {
   try {
@@ -875,13 +668,338 @@ const fetchImages = async (offset = 0) => {
   }
 };
 
+// ===== 实体相册 =====
+const fetchAlbums = async () => {
+  try {
+    const res = await fetch('/api/albums');
+    if (res.status === 401) return;
+    const data = await res.json();
+    if (data.success) {
+      realAlbums.value = data.albums || [];
+      ungroupedCount.value = data.ungrouped_count || 0;
+      defaultAlbumId.value = data.default_album_id ?? null;
+    } else {
+      console.warn('fetchAlbums failed:', data.error || res.status);
+    }
+  } catch (e) {
+    console.warn('fetchAlbums network error:', e);
+  }
+};
+
+const fetchAlbumImages = async (albumId: number) => {
+  albumLoading.value = true;
+  try {
+    const res = await fetch(`/api/images?limit=500&album_id=${albumId}`);
+    if (res.status === 401) {
+      user.value = null;
+      return;
+    }
+    const data = await res.json();
+    if (data.success) albumImages.value = data.images || [];
+  } finally {
+    albumLoading.value = false;
+  }
+};
+
+const openRealAlbum = async (albumId: number) => {
+  activeKey.value = '';
+  activeAlbumId.value = albumId;
+  albumImages.value = [];
+  await fetchAlbumImages(albumId);
+};
+
+const closeRealAlbum = () => {
+  activeAlbumId.value = null;
+  albumImages.value = [];
+};
+
+// ===== 新建 / 重命名相册 =====
+type AlbumDialogMode = 'create' | 'create-child' | 'rename';
+const albumDialogOpen = ref(false);
+const albumDialogMode = ref<AlbumDialogMode>('create');
+const albumNameInput = ref('');
+const albumSubmitting = ref(false);
+
+const albumDialogTitle = computed(() =>
+  albumDialogMode.value === 'rename' ? '重命名相册' : albumDialogMode.value === 'create-child' ? '新建子相册' : '新建相册',
+);
+
+const albumDialogDesc = computed(() => {
+  if (albumDialogMode.value === 'rename') return `修改「${currentAlbum.value?.name || ''}」的名称。`;
+  if (albumDialogMode.value === 'create-child') return `在「${currentAlbum.value?.name || ''}」下创建子相册。`;
+  return '创建顶级相册，上传时可选择将图片归入该相册。';
+});
+
+const openAlbumDialog = (mode: AlbumDialogMode) => {
+  albumDialogMode.value = mode;
+  albumNameInput.value = mode === 'rename' ? currentAlbum.value?.name || '' : '';
+  albumDialogOpen.value = true;
+};
+
+const submitAlbumDialog = async () => {
+  const name = albumNameInput.value.trim();
+  if (!name || albumSubmitting.value) return;
+  albumSubmitting.value = true;
+  try {
+    const isRename = albumDialogMode.value === 'rename';
+    const res = await fetch(isRename ? `/api/albums/${activeAlbumId.value}` : '/api/albums', {
+      method: isRename ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(
+        isRename ? { name } : { name, parent_id: albumDialogMode.value === 'create-child' ? activeAlbumId.value : null },
+      ),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      toast({ title: isRename ? '保存失败' : '创建失败', description: data.error, variant: 'destructive' });
+      return;
+    }
+    albumDialogOpen.value = false;
+    await fetchAlbums();
+    toast({ title: 'Tips', description: isRename ? '相册已重命名' : `已创建「${name}」` });
+  } catch {
+    toast({ title: '操作失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+  } finally {
+    albumSubmitting.value = false;
+  }
+};
+
+// ===== 删除相册 =====
+const deleteAlbumOpen = ref(false);
+const deletingAlbum = ref(false);
+
+const openDeleteAlbumDialog = () => {
+  deleteAlbumOpen.value = true;
+};
+
+const confirmDeleteAlbum = async () => {
+  if (!currentAlbum.value || deletingAlbum.value) return;
+  deletingAlbum.value = true;
+  try {
+    const res = await fetch(`/api/albums/${currentAlbum.value.id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.success) {
+      toast({ title: '删除失败', description: data.error, variant: 'destructive' });
+      return;
+    }
+    deleteAlbumOpen.value = false;
+    closeRealAlbum();
+    await fetchAlbums();
+    toast({ title: 'Tips', description: '相册已删除，图片已移入未分组' });
+  } catch {
+    toast({ title: '删除失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+  } finally {
+    deletingAlbum.value = false;
+  }
+};
+
+// ===== 移动图片到相册（单个 / 批量，含移入未分组） =====
+// 相册树平铺为下拉选项（子相册缩进显示）
+const albumTreeOptions = computed(() => {
+  const byParent = new Map<number | null, RealAlbum[]>();
+  for (const a of realAlbums.value) {
+    const p = a.parent_id ?? null;
+    if (!byParent.has(p)) byParent.set(p, []);
+    byParent.get(p)!.push(a);
+  }
+  const out: { id: number; label: string }[] = [];
+  const walk = (parent: number | null, depth: number) => {
+    for (const a of byParent.get(parent) || []) {
+      out.push({ id: a.id, label: `${'　'.repeat(depth)}${depth ? '└ ' : ''}${a.name}` });
+      walk(a.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+});
+
+const moveOpen = ref(false);
+// 支持单张与批量：moveTargetIds 为待移动图片 id 列表
+const moveTargetIds = ref<number[]>([]);
+const moveTargetName = ref('');
+const moveAlbumValue = ref<string>('none');
+const moving = ref(false);
+
+const openMoveDialog = (img: ImageRecord) => {
+  moveTargetIds.value = [img.id];
+  moveTargetName.value = img.filename || '未命名';
+  // 默认选当前所在相册；未分组时停留在 none
+  moveAlbumValue.value = img.album_id ? String(img.album_id) : 'none';
+  moveOpen.value = true;
+};
+
+const openBatchMoveDialog = () => {
+  if (!selectedIds.value.size) return;
+  moveTargetIds.value = [...selectedIds.value];
+  moveTargetName.value = '';
+  moveAlbumValue.value = 'none';
+  moveOpen.value = true;
+};
+
+const confirmMove = async () => {
+  if (moving.value || !moveTargetIds.value.length) return;
+  const target = moveAlbumValue.value === 'none' ? null : Number(moveAlbumValue.value);
+  if (target !== null && (!Number.isInteger(target) || target <= 0)) return;
+  moving.value = true;
+  try {
+    const results = await Promise.all(
+      moveTargetIds.value.map((id) =>
+        fetch(`/api/images/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ album_id: target }),
+        })
+          .then((r) => r.json())
+          .catch(() => ({ success: false })),
+      ),
+    );
+    const failed = results.filter((r: any) => !r.success).length;
+    const okCount = moveTargetIds.value.length - failed;
+    const idSet = new Set(moveTargetIds.value);
+    // 实体相册详情视图：归属变化才从列表移除（未分组视图 activeAlbumId=0 对应 null）
+    const currentViewAlbumId = activeAlbumId.value === 0 ? null : activeAlbumId.value;
+    if (activeAlbumId.value !== null && target !== currentViewAlbumId) {
+      albumImages.value = albumImages.value.filter((i) => !idSet.has(i.id));
+    }
+    // 同步全局列表的 album_id
+    for (const img of images.value) {
+      if (idSet.has(img.id)) img.album_id = target;
+    }
+    selectedIds.value = new Set();
+    moveOpen.value = false;
+    await fetchAlbums();
+    if (failed) {
+      toast({ title: '部分移动失败', description: `${failed} 张移动失败`, variant: 'destructive' });
+    } else {
+      toast({ title: 'Tips', description: `已移动 ${okCount} 张图片` });
+    }
+  } catch {
+    toast({ title: '移动失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+  } finally {
+    moving.value = false;
+  }
+};
+
+// ===== 批量删除（实体相册详情 / 按时间 / 按标签通用） =====
+const batchDeleteOpen = ref(false);
+const batchDeleting = ref(false);
+
+const openBatchDeleteDialog = () => {
+  if (!selectedIds.value.size) return;
+  batchDeleteOpen.value = true;
+};
+
+const confirmBatchDelete = async () => {
+  if (batchDeleting.value || !selectedIds.value.size) return;
+  batchDeleting.value = true;
+  try {
+    const ids = [...selectedIds.value];
+    const results = await Promise.all(
+      ids.map((id) =>
+        fetch(`/api/images/${id}`, { method: 'DELETE' })
+          .then((r) => r.json())
+          .catch(() => ({ success: false })),
+      ),
+    );
+    const failed = results.filter((r: any) => !r.success).length;
+    const okIds = new Set(ids.filter((_, idx) => results[idx]?.success));
+    let removedSize = 0;
+    // 实体相册详情视图
+    if (activeAlbumId.value !== null) {
+      albumImages.value = albumImages.value.filter((i) => !okIds.has(i.id));
+    }
+    images.value = images.value.filter((i) => {
+      if (okIds.has(i.id)) {
+        removedSize += i.size || 0;
+        return false;
+      }
+      return true;
+    });
+    stats.value = {
+      total: Math.max(0, stats.value.total - okIds.size),
+      totalSize: Math.max(0, stats.value.totalSize - removedSize),
+    };
+    selectedIds.value = new Set();
+    batchDeleteOpen.value = false;
+    exitBatchMode();
+    // 按时间/按标签分组删空后自动回到相册列表（与单张删除一致）
+    if (activeAlbum.value && !activeAlbum.value.images.length) activeKey.value = '';
+    await fetchAlbums();
+    if (failed) {
+      toast({ title: '部分删除失败', description: `${failed} 张删除失败`, variant: 'destructive' });
+    } else {
+      toast({ title: 'Tips', description: `已删除 ${okIds.size} 张图片` });
+    }
+  } catch {
+    toast({ title: '删除失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+  } finally {
+    batchDeleting.value = false;
+  }
+};
+
+// ===== 相册详情内设为默认上传相册 =====
+const settingDefault = ref(false);
+const setDefaultFromDetail = async () => {
+  if (!currentAlbum.value || settingDefault.value) return;
+  settingDefault.value = true;
+  try {
+    const res = await fetch('/api/albums/default', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ album_id: currentAlbum.value.id }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      toast({ title: '设置失败', description: data.error, variant: 'destructive' });
+      return;
+    }
+    defaultAlbumId.value = data.default_album_id;
+    toast({ title: 'Tips', description: '已设为默认上传相册' });
+  } catch {
+    toast({ title: '设置失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+  } finally {
+    settingDefault.value = false;
+  }
+};
+
+// ===== 设为相册封面（再次点击同一张则取消封面） =====
+const settingCover = ref(false);
+const setCoverImage = async (img: ImageRecord) => {
+  if (!currentAlbum.value || settingCover.value) return;
+  const isCurrentCover = currentAlbum.value.cover_image_id === img.id;
+  settingCover.value = true;
+  try {
+    const res = await fetch(`/api/albums/${currentAlbum.value.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cover_image_id: isCurrentCover ? null : img.id }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      toast({ title: '设置失败', description: data.error, variant: 'destructive' });
+      return;
+    }
+    await fetchAlbums();
+    toast({ title: 'Tips', description: isCurrentCover ? '已取消相册封面' : '已设为相册封面' });
+  } catch {
+    toast({ title: '设置失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+  } finally {
+    settingCover.value = false;
+  }
+};
+
 const init = async () => {
   loading.value = true;
   images.value = [];
   stats.value = { total: 0, totalSize: 0 };
   activeKey.value = '';
+  closeRealAlbum();
+  realAlbums.value = [];
+  ungroupedCount.value = 0;
   await fetchUser();
-  if (user.value) await fetchImages(0);
+  if (user.value) {
+    await Promise.all([fetchImages(0), fetchAlbums()]);
+  }
   loading.value = false;
 };
 
@@ -909,8 +1027,8 @@ const loadViewImage = () => {
   });
 };
 
-const openPreview = async (clicked: ImageRecord) => {
-  const list = activeAlbum.value?.images || images.value;
+const openPreview = async (clicked: ImageRecord, source?: ImageRecord[]) => {
+  const list = source || activeAlbum.value?.images || images.value;
   if (!list.length) return;
   await loadViewImage();
   // 构造 mock items，让 ViewImage 能通过 tagName 判断视频
@@ -928,6 +1046,11 @@ const openPreview = async (clicked: ImageRecord) => {
 };
 
 // ===== 复制链接 =====
+// 图片/视频加载完成后标记 loaded，触发淡入并停止骨架动画
+const onThumbLoad = (e: Event) => {
+  (e.target as HTMLElement)?.classList.add('loaded');
+};
+
 const copyLink = async (img: ImageRecord) => {
   const url = fileUrl(img);
   let ok = false;
@@ -993,8 +1116,12 @@ const batchDialogOpen = ref(false);
 const batchTagInput = ref('');
 const batchSaving = ref(false);
 
-const currentAlbumIds = computed(() => new Set(activeAlbum.value?.images.map((i) => i.id) || []));
-const isAllSelected = computed(() => currentAlbumIds.value.size > 0 && selectedIds.value.size === currentAlbumIds.value.size);
+// 当前批量操作可视图片集合：实体相册详情用 albumImages，按时间/按标签用 activeAlbum.images
+const currentBatchImageIds = computed(() => {
+  if (activeAlbumId.value !== null) return new Set(albumImages.value.map((i) => i.id));
+  return new Set(activeAlbum.value?.images.map((i) => i.id) || []);
+});
+const isAllSelected = computed(() => currentBatchImageIds.value.size > 0 && selectedIds.value.size === currentBatchImageIds.value.size);
 
 const enterBatchMode = () => {
   batchMode.value = true;
@@ -1017,7 +1144,7 @@ const toggleSelectAll = () => {
   if (isAllSelected.value) {
     selectedIds.value = new Set();
   } else {
-    selectedIds.value = new Set(currentAlbumIds.value);
+    selectedIds.value = new Set(currentBatchImageIds.value);
   }
 };
 
@@ -1106,6 +1233,11 @@ const confirmDelete = async () => {
     }
     const { id, size } = deleteTarget.value;
     images.value = images.value.filter((i) => i.id !== id);
+    // 实体相册详情视图中同步移除并刷新相册统计
+    if (activeAlbumId.value !== null) {
+      albumImages.value = albumImages.value.filter((i) => i.id !== id);
+      fetchAlbums();
+    }
     stats.value = {
       total: Math.max(0, stats.value.total - 1),
       totalSize: Math.max(0, stats.value.totalSize - (size || 0)),

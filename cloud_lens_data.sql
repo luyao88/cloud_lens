@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS users (
   -- 邮箱密码登录用（OAuth 用户可为空）
   password_hash TEXT,
 
+  -- 上传设置
+  default_album_id INTEGER,              -- 默认上传相册（NULL 为未分组）
+
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
@@ -57,16 +60,41 @@ CREATE TABLE IF NOT EXISTS images (
   filename TEXT,
   size INTEGER,
   tags TEXT,                            -- 标签（逗号分隔，可空）
+  album_id INTEGER,                     -- 所属相册（NULL 为未分组）
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_images_user_id ON images(user_id);
 CREATE INDEX IF NOT EXISTS idx_images_imgur_id ON images(imgur_id);
+CREATE INDEX IF NOT EXISTS idx_images_album_id ON images(album_id);
 
 -- 已有数据库升级用（新库无需执行，CREATE TABLE IF NOT EXISTS 已包含新列）：
 -- ALTER TABLE images ADD COLUMN imgur_id TEXT;
 -- ALTER TABLE images ADD COLUMN tags TEXT;
+-- ALTER TABLE images ADD COLUMN album_id INTEGER;
+-- ALTER TABLE users ADD COLUMN default_album_id INTEGER;
+
+
+-- ======================
+-- 相册表（支持嵌套，parent_id 自引用）
+-- ======================
+CREATE TABLE IF NOT EXISTS albums (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,                    -- 相册名（同一父级下唯一由应用层保证）
+  parent_id INTEGER,                     -- 父相册ID（NULL 为顶级相册）
+  cover_image_id INTEGER,                -- 自定义封面图片ID（NULL 时回退为相册内最新一张）
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_albums_user_id ON albums(user_id);
+CREATE INDEX IF NOT EXISTS idx_albums_parent_id ON albums(parent_id);
+
+-- 已有数据库升级用（新库无需执行，CREATE TABLE IF NOT EXISTS 已包含新列）：
+-- ALTER TABLE albums ADD COLUMN cover_image_id INTEGER;
 
 
 -- ======================

@@ -1,37 +1,261 @@
 <template>
-  <section class="Upload">
+  <section
+    class="Upload"
+    :class="{ 'is-dragover': isDragover }"
+    @dragover.prevent="onDragover"
+    @dragenter.prevent="onDragover"
+    @dragleave.prevent="onDragleave"
+    @drop.prevent="onDrop"
+  >
     <input type="file" multiple @change="fileListChange" :accept="UploadConfig.AcceptTypes" />
     <div class="placeholder">
       <div class="upload-icon-wrap">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg v-if="!isDragover" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 13v8" />
           <path d="m8 17 4-4 4 4" />
           <path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25" />
         </svg>
+        <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v16" />
+          <path d="m6 10 6 6 6-6" />
+          <path d="M5 22h14" />
+        </svg>
       </div>
       <p>
-        <span class="upload-title">点击或拖拽上传文件</span>
-        <span class="upload-hint">支持图片和视频 · 最大 {{ UploadConfig.MaxSize }}MB · 可粘贴上传</span>
+        <span class="upload-title">{{ isDragover ? '释放即可上传' : '点击或拖拽上传文件' }}</span>
+        <span class="upload-hint">{{ isDragover ? `检测到 ${dragoverCount} 个文件` : `支持图片和视频 · 最大 ${UploadConfig.MaxSize}MB · 可粘贴上传` }}</span>
       </p>
     </div>
   </section>
+
+  <!-- 上传目标相册（登录后显示） -->
+  <div v-if="loggedIn && albumsLoaded" class="upload-album-bar">
+    <svg class="album-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+    </svg>
+    <span class="album-bar-label">上传到</span>
+    <select class="album-select" :value="selectValue" @change="onSelectChange">
+      <option value="default">跟随默认（{{ defaultAlbumLabel }}）</option>
+      <option value="none">未分组</option>
+      <option v-for="opt in albumOptions" :key="opt.id" :value="String(opt.id)">{{ opt.label }}</option>
+    </select>
+    <button v-if="targetAlbum !== undefined" class="album-bar-btn" :disabled="settingDefault" @click="setDefaultAlbum">
+      {{ settingDefault ? '设置中...' : '设为默认' }}
+    </button>
+    <button class="album-bar-btn" @click="openCreateDialog">＋ 新建相册</button>
+  </div>
+
+  <!-- 新建相册弹窗 -->
+  <Dialog :open="createOpen" @update:open="(v: boolean) => (createOpen = v)">
+    <DialogContent class="max-w-md">
+      <div class="flex flex-col gap-1.5 text-center">
+        <DialogTitle>新建相册</DialogTitle>
+        <DialogDescription> 创建顶级相册，上传时可在相册列表中选中它。 </DialogDescription>
+      </div>
+      <input v-model="createName" class="dialog-input" type="text" placeholder="请输入相册名称（最多 50 字）" maxlength="50" @keyup.enter="confirmCreate" />
+      <div class="dialog-footer">
+        <button class="btn ghost" @click="createOpen = false">取消</button>
+        <button class="btn primary" :disabled="creating" @click="confirmCreate">{{ creating ? '创建中...' : '创建' }}</button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useToast } from '@/components/ui/toast/use-toast';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useUploadManager } from '@/composables/useUploadManager';
 const { toast } = useToast();
 // 上传队列由全局管理器维护，切换页面不会中断
-const { items, addFiles } = useUploadManager();
+const { items, addFiles, targetAlbum, setTargetAlbum } = useUploadManager();
 // 参数
 const props = defineProps(['UploadConfig']);
 const UploadConfig = ref<any>(props.UploadConfig);
+
+// ===== 上传目标相册 =====
+interface AlbumRow {
+  id: number;
+  name: string;
+  parent_id: number | null;
+  image_count: number;
+  created_at: string;
+}
+
+const loggedIn = ref(false);
+const albumsLoaded = ref(false);
+const albums = ref<AlbumRow[]>([]);
+const defaultAlbumId = ref<number | null>(null);
+
+const fetchAlbums = async () => {
+  try {
+    const res = await fetch('/api/albums');
+    if (res.status === 401) {
+      loggedIn.value = false;
+      return;
+    }
+    const data = await res.json();
+    if (data.success) {
+      albums.value = data.albums || [];
+      defaultAlbumId.value = data.default_album_id ?? null;
+      albumsLoaded.value = true;
+    }
+  } catch {
+    // 网络异常时保持隐藏，不影响上传主流程
+  }
+};
+
+const fetchState = async () => {
+  try {
+    const res = await fetch('/api/auth/me');
+    const data = await res.json();
+    loggedIn.value = !!data?.user;
+  } catch {
+    loggedIn.value = false;
+  }
+  if (loggedIn.value) await fetchAlbums();
+  else albumsLoaded.value = false;
+};
+
+// 相册树平铺为下拉选项（子相册缩进显示）
+const albumOptions = computed(() => {
+  const byParent = new Map<number | null, AlbumRow[]>();
+  for (const a of albums.value) {
+    const p = a.parent_id ?? null;
+    if (!byParent.has(p)) byParent.set(p, []);
+    byParent.get(p)!.push(a);
+  }
+  const out: { id: number; label: string }[] = [];
+  const walk = (parent: number | null, depth: number) => {
+    for (const a of byParent.get(parent) || []) {
+      out.push({ id: a.id, label: `${'　'.repeat(depth)}${depth ? '└ ' : ''}${a.name}` });
+      walk(a.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+});
+
+const selectValue = computed(() =>
+  targetAlbum.value === undefined ? 'default' : targetAlbum.value === null ? 'none' : String(targetAlbum.value),
+);
+
+const defaultAlbumLabel = computed(() => {
+  if (defaultAlbumId.value === null) return '未分组';
+  const hit = albums.value.find((a) => a.id === defaultAlbumId.value);
+  return hit?.name || '未分组';
+});
+
+const onSelectChange = (e: Event) => {
+  const v = (e.target as HTMLSelectElement).value;
+  if (v === 'default') setTargetAlbum(undefined);
+  else if (v === 'none') setTargetAlbum(null);
+  else setTargetAlbum(Number(v));
+};
+
+// 设为默认上传相册
+const settingDefault = ref(false);
+const setDefaultAlbum = async () => {
+  if (targetAlbum.value === undefined || settingDefault.value) return;
+  settingDefault.value = true;
+  try {
+    const res = await fetch('/api/albums/default', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ album_id: targetAlbum.value }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      toast({ title: '设置失败', description: data.error, variant: 'destructive' });
+      return;
+    }
+    defaultAlbumId.value = data.default_album_id;
+    toast({ title: 'Tips', description: '默认上传相册已更新' });
+  } catch {
+    toast({ title: '设置失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+  } finally {
+    settingDefault.value = false;
+  }
+};
+
+// 新建相册
+const createOpen = ref(false);
+const createName = ref('');
+const creating = ref(false);
+
+const openCreateDialog = () => {
+  createName.value = '';
+  createOpen.value = true;
+};
+
+const confirmCreate = async () => {
+  const name = createName.value.trim();
+  if (!name || creating.value) return;
+  creating.value = true;
+  try {
+    const res = await fetch('/api/albums', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      toast({ title: '创建失败', description: data.error, variant: 'destructive' });
+      return;
+    }
+    createOpen.value = false;
+    await fetchAlbums();
+    setTargetAlbum(data.album.id);
+    toast({ title: 'Tips', description: `已创建「${name}」并设为上传相册` });
+  } catch {
+    toast({ title: '创建失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+  } finally {
+    creating.value = false;
+  }
+};
+
+// ===== 拖拽视觉同步 =====
+// 依赖 dragenter/dragleave 计数避免子元素冒泡导致的闪烁
+let dragCounter = 0;
+const isDragover = ref(false);
+const dragoverCount = ref(0);
+
+const onDragover = (e: DragEvent) => {
+  if (e.dataTransfer?.types?.includes('Files')) {
+    dragoverCount.value = e.dataTransfer.items?.length || 1;
+  }
+};
+const onDragenter = (e: DragEvent) => {
+  if (!e.dataTransfer?.types?.includes('Files')) return;
+  dragCounter++;
+  isDragover.value = true;
+  onDragover(e);
+};
+const onDragleave = () => {
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragCounter = 0;
+    isDragover.value = false;
+  }
+};
+const onDrop = (e: DragEvent) => {
+  dragCounter = 0;
+  isDragover.value = false;
+  const files = e.dataTransfer?.files;
+  if (files && files.length > 0) {
+    fileListChange(Array.from(files), true);
+  }
+};
+
 // 文件列表变化事件（选择 / 拖拽 / 粘贴）
 const fileListChange = async (v: Event | File[], type: boolean = false) => {
   let targetFileListArr: any[] = [];
   if (!type) {
     if (!(v as Event).target) return;
     targetFileListArr = Array.from(((v as Event).target as HTMLInputElement).files || []);
+    // 重置 input value 允许重复选择同一文件
+    ((v as Event).target as HTMLInputElement).value = '';
   } else {
     targetFileListArr = Array.from(v as File[]);
   }
@@ -117,9 +341,12 @@ const pasteUpload = (v: any) => {
 
 onMounted(() => {
   document.addEventListener('paste', pasteUpload);
+  fetchState();
+  window.addEventListener('auth:changed', fetchState);
 });
 onUnmounted(() => {
   document.removeEventListener('paste', pasteUpload);
+  window.removeEventListener('auth:changed', fetchState);
 });
 </script>
 
