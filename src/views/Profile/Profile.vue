@@ -24,7 +24,7 @@
         <div class="profile-banner"></div>
         <div class="profile-body">
           <div class="profile-avatar-wrap">
-            <img v-if="user.avatar_url" :src="user.avatar_url" :alt="user.username" class="profile-avatar" />
+            <img v-if="user.avatar_url" :src="`/imgur-proxy/HCki6aX.jpeg`" :alt="user.username" class="profile-avatar" />
             <div v-else class="profile-avatar profile-avatar-default">{{ avatarLetter }}</div>
           </div>
           <div class="profile-meta">
