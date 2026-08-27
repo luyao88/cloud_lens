@@ -501,6 +501,7 @@ import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast/use-toast';
 import { resolveAvatarSrc } from '@/utils';
+import { ALBUMS_CHANGED_EVENT } from '@/composables/useUploadManager';
 
 const { toast } = useToast();
 
@@ -640,6 +641,9 @@ const currentAlbum = computed(() => (activeAlbumId.value && activeAlbumId.value 
 const parentAlbum = computed(() => (currentAlbum.value?.parent_id ? realAlbums.value.find((a) => a.id === currentAlbum.value!.parent_id) || null : null));
 const childAlbums = computed(() => realAlbums.value.filter((a) => a.parent_id === activeAlbumId.value));
 
+// 相册结构变化（新建/重命名/删除）后通知上传面板/抽屉刷新共享列表
+const notifyAlbumsChanged = () => window.dispatchEvent(new CustomEvent(ALBUMS_CHANGED_EVENT));
+
 // ===== 数据加载 =====
 const fetchUser = async () => {
   try {
@@ -767,6 +771,7 @@ const submitAlbumDialog = async () => {
     }
     albumDialogOpen.value = false;
     await fetchAlbums();
+    notifyAlbumsChanged();
     toast({ title: 'Tips', description: isRename ? '相册已重命名' : `已创建「${name}」` });
   } catch {
     toast({ title: '操作失败', description: '网络错误，请稍后重试', variant: 'destructive' });
@@ -796,6 +801,7 @@ const confirmDeleteAlbum = async () => {
     deleteAlbumOpen.value = false;
     closeRealAlbum();
     await fetchAlbums();
+    notifyAlbumsChanged();
     toast({ title: 'Tips', description: '相册已删除，图片已移入未分组' });
   } catch {
     toast({ title: '删除失败', description: '网络错误，请稍后重试', variant: 'destructive' });

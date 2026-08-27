@@ -42,18 +42,57 @@ export interface AlbumRow {
 const albums = ref<AlbumRow[]>([]);
 const defaultAlbumId = ref<number | null>(null);
 
-const fetchAlbums = async () => {
+// ===== 上传区共享状态（Home 面板与 Header 抽屉两个实例共用） =====
+const uploadLoggedIn = ref(false);
+// true 表示已完成过一次相册表加载（用于避免每次打开都闪空白）
+const albumsLoaded = ref(false);
+// 同步进行中：相册条在同步完成前不渲染，保证"先同步再显示"
+const stateSyncing = ref(false);
+
+let syncToken = 0;
+export const ALBUMS_CHANGED_EVENT = 'cl:albums-changed';
+
+/**
+ * 统一刷新登录态 + 相册列表。
+ * 多处并发调用安全：使用序号丢弃过期结果。
+ */
+const refreshUploadState = async (): Promise<void> => {
+  const token = ++syncToken;
+  stateSyncing.value = true;
   try {
-    const res = await fetch('/api/albums');
-    if (res.status === 401) return;
-    const data = await res.json();
-    if (data.success) {
-      albums.value = data.albums || [];
-      defaultAlbumId.value = data.default_album_id ?? null;
+    let loggedInNow = false;
+    try {
+      const res = await fetch('/api/auth/me');
+      const data = await res.json();
+      loggedInNow = !!data?.user;
+    } catch {
+      loggedInNow = false;
     }
-  } catch {
-    // 网络异常时保持旧数据
+    if (token !== syncToken) return;
+    uploadLoggedIn.value = loggedInNow;
+
+    if (loggedInNow) {
+      try {
+        const res = await fetch('/api/albums');
+        const data = await res.json();
+        if (token !== syncToken) return;
+        if (data.success) {
+          albums.value = data.albums || [];
+          defaultAlbumId.value = data.default_album_id ?? null;
+          albumsLoaded.value = true;
+        }
+      } catch {
+        // 网络异常时保留旧列表
+        if (token === syncToken) albumsLoaded.value = albums.value.length > 0 || albumsLoaded.value;
+      }
+    }
+  } finally {
+    if (token === syncToken) stateSyncing.value = false;
   }
+};
+
+const fetchAlbums = async () => {
+  await refreshUploadState();
 };
 
 // 相册树平铺为下拉选项（子相册缩进显示）
@@ -109,7 +148,11 @@ const checkAuth = async (): Promise<boolean> => {
 if (typeof window !== 'undefined') {
   window.addEventListener('auth:changed', () => {
     authKnown = false;
-    fetchAlbums();
+    refreshUploadState();
+  });
+  // 相册的创建/重命名/删除发生在 Profile 等页面时，广播此事件保持两个上传实例同步
+  window.addEventListener(ALBUMS_CHANGED_EVENT, () => {
+    refreshUploadState();
   });
 }
 
@@ -381,6 +424,10 @@ export const useUploadManager = () => ({
   albumTreeOptions,
   defaultAlbumId,
   fetchAlbums,
+  uploadLoggedIn,
+  albumsLoaded,
+  stateSyncing,
+  refreshUploadState,
   changeItemAlbum,
 });
 

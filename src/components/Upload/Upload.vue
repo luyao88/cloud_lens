@@ -3,7 +3,7 @@
     class="Upload"
     :class="{ 'is-dragover': isDragover }"
     @dragover.prevent="onDragover"
-    @dragenter.prevent="onDragover"
+    @dragenter.prevent="onDragenter"
     @dragleave.prevent="onDragleave"
     @drop.prevent="onDrop"
   >
@@ -28,8 +28,8 @@
     </div>
   </section>
 
-  <!-- 上传目标相册（登录后显示） -->
-  <div v-if="loggedIn && albumsLoaded" class="upload-album-bar">
+  <!-- 上传目标相册（登录后显示；同步完成前不渲染，避免闪空白） -->
+  <div v-if="uploadLoggedIn && albumsLoaded && !stateSyncing" class="upload-album-bar">
     <svg class="album-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect width="18" height="18" x="3" y="3" rx="2" />
       <circle cx="9" cy="9" r="2" />
@@ -69,30 +69,14 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { useUploadManager } from '@/composables/useUploadManager';
 const { toast } = useToast();
 // 上传队列由全局管理器维护，切换页面不会中断
-const { items, addFiles, targetAlbum, setTargetAlbum, albums, albumTreeOptions, defaultAlbumId, fetchAlbums } = useUploadManager();
+const { items, addFiles, targetAlbum, setTargetAlbum, albums, albumTreeOptions, defaultAlbumId, fetchAlbums, refreshUploadState, uploadLoggedIn, albumsLoaded, stateSyncing } = useUploadManager();
 // 参数
 const props = defineProps(['UploadConfig']);
 const UploadConfig = ref<any>(props.UploadConfig);
 
 // ===== 上传目标相册 =====
-const loggedIn = ref(false);
-const albumsLoaded = ref(false);
-
-const fetchState = async () => {
-  try {
-    const res = await fetch('/api/auth/me');
-    const data = await res.json();
-    loggedIn.value = !!data?.user;
-  } catch {
-    loggedIn.value = false;
-  }
-  if (loggedIn.value) {
-    await fetchAlbums();
-    albumsLoaded.value = true;
-  } else {
-    albumsLoaded.value = false;
-  }
-};
+// 登录态/相册表/同步中标志全部来自全局管理器：
+// Home 面板与 Header 抽屉两个实例共享同一份状态，任一处打开都会先同步再显示
 
 // 相册选项直接使用全局管理器的 albumTreeOptions
 const albumOptions = albumTreeOptions;
@@ -301,12 +285,11 @@ const pasteUpload = (v: any) => {
 
 onMounted(() => {
   document.addEventListener('paste', pasteUpload);
-  fetchState();
-  window.addEventListener('auth:changed', fetchState);
+  // 挂载时全局同步一次（抽屉每次打开都会重新挂载 → 每次打开都拿到最新数据）
+  refreshUploadState();
 });
 onUnmounted(() => {
   document.removeEventListener('paste', pasteUpload);
-  window.removeEventListener('auth:changed', fetchState);
 });
 </script>
 
