@@ -161,6 +161,12 @@
                     <path d="m9 15 3-3 3 3" />
                   </svg>
                 </button>
+                <button class="action-btn" title="编辑标签" @click="openTagDialog(img)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+                    <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+                  </svg>
+                </button>
                 <button v-if="currentAlbum" class="action-btn star-btn" :class="{ active: currentAlbum.cover_image_id === img.id }" :title="currentAlbum.cover_image_id === img.id ? '取消相册封面' : '设为相册封面'" @click="setCoverImage(img)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />

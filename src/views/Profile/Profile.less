@@ -101,7 +101,7 @@
 
 .profile-banner {
   height: 6rem;
-  background: linear-gradient(135deg, #03b6aa 0%, #0d9488 40%, #06796d 100%);
+  background: linear-gradient(135deg, #03b6aa 0%, #0d9488 40%, #03b6aa 100%);
   position: relative;
 
   // 装饰性光晕
@@ -941,11 +941,13 @@
   opacity: 0;
   transform: translateY(4px);
   transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
 }
 
 .thumb-wrap:hover .thumb-actions {
   opacity: 1;
   transform: translateY(0);
+  pointer-events: auto;
 }
 
 .action-btn {
