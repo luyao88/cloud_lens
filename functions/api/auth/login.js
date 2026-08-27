@@ -7,7 +7,7 @@
  * 登录成功后创建 session 并返回 cookie
  * remember=true（默认）: 30 天持久 cookie；remember=false: 会话级 cookie
  */
-import { verifyPassword, createSession } from './_utils.js';
+import { verifyPassword, createSession, rateLimit, checkRateLimit } from './_utils.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -24,6 +24,12 @@ export async function onRequest({ request, env }) {
   const { email, password, remember } = body;
   if (!email || !password) {
     return Response.json({ success: false, error: '缺少参数' }, { status: 400 });
+  }
+
+  // 防暴力破解：同一邮箱 15 分钟内最多失败 10 次（预检只读，不计成功登录）
+  const limiter = await checkRateLimit(env, `login:${String(email).toLowerCase()}`, 10);
+  if (limiter.limited) {
+    return Response.json({ success: false, error: '失败次数过多，请 15 分钟后再试' }, { status: 429 });
   }
 
   // 查询用户（优先从 user_auth_methods 查，回退到 users 表）
@@ -59,6 +65,8 @@ export async function onRequest({ request, env }) {
 
   const valid = await verifyPassword(password, passwordHash);
   if (!valid) {
+    // 仅统计真实存在的账号的失败次数，避免为任意输入无限刷计数
+    await rateLimit(env, `login:${String(email).toLowerCase()}`, 10, 900);
     return Response.json({ success: false, error: '邮箱或密码错误' }, { status: 400 });
   }
 

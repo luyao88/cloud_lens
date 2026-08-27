@@ -568,6 +568,10 @@ const defaultAlbumId = ref<number | null>(null);
 const activeAlbumId = ref<number | null>(null);
 const albumImages = ref<ImageRecord[]>([]);
 const albumLoading = ref(false);
+// 相册图片请求序号：丢弃切换相册后晚到的过期响应
+let albumFetchSeq = 0;
+// 主列表请求序号：自动刷新(offset=0)与 loadMore 并发时只保留最新响应
+let imagesFetchSeq = 0;
 
 const avatarLetter = computed(() => (user.value?.username || '?')[0].toUpperCase());
 // 头像 URL：统一走 /v2/ 代理，避免 i.imgur.com 国内直连失败
@@ -657,6 +661,7 @@ const fetchUser = async () => {
 };
 
 const fetchImages = async (offset = 0) => {
+  const seq = ++imagesFetchSeq;
   const res = await fetch(`/api/images?limit=${PAGE_SIZE}&offset=${offset}`);
   if (res.status === 401) {
     user.value = null;
@@ -664,6 +669,8 @@ const fetchImages = async (offset = 0) => {
   }
   const data = await res.json();
   if (!data.success) return;
+  // 只应用最新一次请求的结果，避免 loadMore 与自动刷新并发时交错写入
+  if (seq !== imagesFetchSeq) return;
   stats.value = data.stats || { total: 0, totalSize: 0 };
   if (offset === 0) {
     images.value = data.images;
@@ -693,6 +700,7 @@ const fetchAlbums = async () => {
 };
 
 const fetchAlbumImages = async (albumId: number) => {
+  const seq = ++albumFetchSeq;
   albumLoading.value = true;
   try {
     const res = await fetch(`/api/images?limit=500&album_id=${albumId}`);
@@ -701,9 +709,16 @@ const fetchAlbumImages = async (albumId: number) => {
       return;
     }
     const data = await res.json();
+    // 快速切换相册时丢弃过期响应，避免慢请求覆盖当前相册
+    if (seq !== albumFetchSeq || activeAlbumId.value !== albumId) return;
     if (data.success) albumImages.value = data.images || [];
+  } catch {
+    if (seq === albumFetchSeq && activeAlbumId.value === albumId) {
+      albumImages.value = [];
+      toast({ title: '加载失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+    }
   } finally {
-    albumLoading.value = false;
+    if (seq === albumFetchSeq) albumLoading.value = false;
   }
 };
 
@@ -711,12 +726,15 @@ const openRealAlbum = async (albumId: number) => {
   activeKey.value = '';
   activeAlbumId.value = albumId;
   albumImages.value = [];
+  // 换相册时退出批量模式并清空选中集，避免误操作上一相册中不可见的图片
+  if (batchMode.value) exitBatchMode();
   await fetchAlbumImages(albumId);
 };
 
 const closeRealAlbum = () => {
   activeAlbumId.value = null;
   albumImages.value = [];
+  if (batchMode.value) exitBatchMode();
 };
 
 // ===== 新建 / 重命名相册 =====

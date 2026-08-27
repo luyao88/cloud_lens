@@ -6,7 +6,7 @@
  *
  * 临时 token = base64(JSON({ email, purpose, exp })) + '.' + HMAC-SHA256 签名
  */
-import { signedToken } from './_utils.js';
+import { signedToken, rateLimit } from './_utils.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -23,6 +23,12 @@ export async function onRequest({ request, env }) {
   const { email, code, purpose } = body;
   if (!email || !code) {
     return Response.json({ success: false, error: '缺少参数' }, { status: 400 });
+  }
+
+  // 防暴力穷举：每个邮箱 10 分钟内最多尝试 12 次（验证码窗口同为 10 分钟）
+  const limiter = await rateLimit(env, `vc:${email}`, 12, 600);
+  if (limiter.limited) {
+    return Response.json({ success: false, error: '尝试次数过多，请 10 分钟后再试' }, { status: 429 });
   }
 
   // 查询最新的未使用验证码
@@ -69,10 +75,10 @@ export async function onRequest({ request, env }) {
   };
   let token;
   try {
-    token = await signedToken(tokenData);
+    token = await signedToken(env, tokenData);
   } catch (err) {
     console.error('[verify-code] signedToken failed:', err);
-    return Response.json({ success: false, error: `Token 生成失败: ${err?.message || String(err)}` }, { status: 500 });
+    return Response.json({ success: false, error: err?.message || 'Token 生成失败' }, { status: 500 });
   }
 
   return Response.json({ success: true, token });

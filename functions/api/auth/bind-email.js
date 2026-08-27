@@ -9,7 +9,7 @@
  *
  * 需要用户已登录（session 有效）
  */
-import { hashPassword, verifyPassword, getUserFromRequest, verifySignedToken, bindAuthMethod } from './_utils.js';
+import { hashPassword, verifyPassword, getUserFromRequest, verifySignedToken, validatePassword } from './_utils.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -34,7 +34,7 @@ export async function onRequest({ request, env }) {
   }
 
   // 验证签名 token
-  const tokenData = await verifySignedToken(token);
+  const tokenData = await verifySignedToken(env, token);
   if (!tokenData) {
     return Response.json({ success: false, error: '无效的 token' }, { status: 400 });
   }
@@ -63,13 +63,19 @@ export async function onRequest({ request, env }) {
   }
 
   // 判断是首次绑定还是更换邮箱（优先 user_auth_methods，回退 users 表）
+  const usersRow = await env.cloud_lens_data.prepare('SELECT provider, email, password_hash FROM users WHERE id = ?').bind(user.id).first();
   let oldBind = await env.cloud_lens_data.prepare('SELECT provider_id, password_hash FROM user_auth_methods WHERE user_id = ? AND provider = ?').bind(user.id, 'email').first();
-  if (!oldBind) {
-    const userRow = await env.cloud_lens_data.prepare("SELECT email as provider_id, password_hash FROM users WHERE id = ? AND provider = 'email'").bind(user.id).first();
-    if (userRow) oldBind = userRow;
+  if (!oldBind && usersRow?.provider === 'email') {
+    oldBind = { provider_id: usersRow.email, password_hash: usersRow.password_hash };
   }
 
   let passwordHash;
+  let stmts;
+  // 邮箱注册的账号需同步 users.provider_id，避免旧邮箱残留可登录
+  const syncUsersStmt =
+    usersRow?.provider === 'email'
+      ? env.cloud_lens_data.prepare('UPDATE users SET email = ?, provider_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(email, email, user.id)
+      : env.cloud_lens_data.prepare('UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(email, user.id);
 
   if (oldBind) {
     // 更换邮箱：需要验证当前密码，不需要新密码
@@ -80,8 +86,7 @@ export async function onRequest({ request, env }) {
     // 获取当前密码哈希
     let storedHash = oldBind.password_hash;
     if (!storedHash) {
-      const userRow = await env.cloud_lens_data.prepare('SELECT password_hash FROM users WHERE id = ?').bind(user.id).first();
-      storedHash = userRow?.password_hash;
+      storedHash = usersRow?.password_hash || null;
     }
 
     if (!storedHash) {
@@ -96,24 +101,35 @@ export async function onRequest({ request, env }) {
     // 保留旧密码哈希
     passwordHash = storedHash;
 
-    // 解绑旧邮箱
-    await env.cloud_lens_data.prepare('DELETE FROM user_auth_methods WHERE user_id = ? AND provider = ?').bind(user.id, 'email').run();
+    stmts = [
+      // 解绑旧邮箱
+      env.cloud_lens_data.prepare('DELETE FROM user_auth_methods WHERE user_id = ? AND provider = ?').bind(user.id, 'email'),
+      // 绑定到当前用户
+      env.cloud_lens_data.prepare(`INSERT INTO user_auth_methods (user_id, provider, provider_id, email, password_hash) VALUES (?, ?, ?, ?, ?)`).bind(user.id, 'email', email, email, passwordHash),
+      syncUsersStmt,
+    ];
   } else {
     // 首次绑定：必须设置密码
-    if (!password || password.length < 6) {
-      return Response.json({ success: false, error: '密码至少 6 位' }, { status: 400 });
+    const pwdError = validatePassword(password);
+    if (pwdError) {
+      return Response.json({ success: false, error: pwdError }, { status: 400 });
     }
     passwordHash = await hashPassword(password);
+
+    stmts = [
+      env.cloud_lens_data.prepare(`INSERT INTO user_auth_methods (user_id, provider, provider_id, email, password_hash) VALUES (?, ?, ?, ?, ?)`).bind(user.id, 'email', email, email, passwordHash),
+      syncUsersStmt,
+    ];
   }
 
-  // 绑定到当前用户
-  const result = await bindAuthMethod(env, user.id, 'email', email, email, passwordHash);
-  if (!result.success) {
-    return Response.json({ success: false, error: result.error }, { status: 400 });
+  // batch 为事务：解绑/绑定/users 同步三步要么全部成功要么全部回滚，
+  // 避免"删了旧邮箱绑定后插入失败"导致账号丢失邮箱登录方式
+  try {
+    await env.cloud_lens_data.batch(stmts);
+  } catch (err) {
+    console.error('[bind-email] batch failed:', err);
+    return Response.json({ success: false, error: '绑定失败，请稍后重试' }, { status: 500 });
   }
-
-  // 更新 users 表的 email
-  await env.cloud_lens_data.prepare('UPDATE users SET email = ? WHERE id = ?').bind(email, user.id).run();
 
   return Response.json({ success: true });
 }

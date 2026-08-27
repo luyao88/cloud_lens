@@ -88,10 +88,14 @@ export async function getUserFromRequest(request, env) {
  *
  * 查找逻辑：
  * 1. 先按 (provider, provider_id) 在 user_auth_methods 中精确查找
- * 2. 如果没找到且 email 不为空，尝试按 email 关联到已有用户（实现账号合并）
+ * 2. 如果没找到且 email 不为空且 emailTrusted 为 true，尝试按 email 关联到已有用户（实现账号合并）
  * 3. 都没找到则创建新用户 + 写入 user_auth_methods
+ *
+ * emailTrusted 必须只在邮箱经过提供商验证时为 true（Google 恒真；GitHub 需
+ * verified 标记；Gitee 无验证信号恒为 false），否则攻击者可在第三方平台填写
+ * 未验证的受害者邮箱从而接管账号。
  */
-export async function findOrCreateUser(env, provider, providerId, email, username, avatarUrl) {
+export async function findOrCreateUser(env, provider, providerId, email, username, avatarUrl, { emailTrusted = false } = {}) {
   // 1. 精确查找该登录方式
   let authMethod = await env.cloud_lens_data
     .prepare(
@@ -112,8 +116,8 @@ export async function findOrCreateUser(env, provider, providerId, email, usernam
     };
   }
 
-  // 2. 如果有 email，尝试按 email 关联到已有用户
-  if (email) {
+  // 2. 如果有已验证的 email，尝试按 email 关联到已有用户
+  if (email && emailTrusted) {
     const existingUser = await env.cloud_lens_data.prepare('SELECT id, username, avatar_url, email FROM users WHERE email = ?').bind(email).first();
 
     if (existingUser) {
@@ -236,6 +240,16 @@ function base64ToBuffer(base64) {
   return bytes.buffer;
 }
 
+/**
+ * 密码基础策略：6 位起、上限 128 位（统一 register / reset / change / bind 的规则）
+ * @returns {string|null} 不通过时返回错误文案，通过返回 null
+ */
+export function validatePassword(password) {
+  if (typeof password !== 'string' || password.length < 6) return '密码至少 6 位';
+  if (password.length > 128) return '密码最长 128 位';
+  return null;
+}
+
 /** 哈希密码，返回 "salt:hash" 格式的字符串 */
 export async function hashPassword(password) {
   const enc = new TextEncoder();
@@ -278,45 +292,128 @@ export async function verifyPassword(password, storedHash) {
     KEY_LENGTH,
   );
 
-  return bufferToBase64(hashBuffer) === hashBase64;
+  return timingSafeEqual(bufferToBase64(hashBuffer), hashBase64);
+}
+
+/**
+ * 常量时间字符串比较：无论内容是否一致都遍历固定轮数，
+ * 避免逐字符短路比较在哈希/签名比对上留下时序侧信道
+ */
+function timingSafeEqual(a, b) {
+  const len = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < len; i++) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return diff === 0;
+}
+
+/**
+ * ============ 接口限流（D1 固定窗口计数） ============
+ * 依赖 cloud_lens_data.sql 中的 api_rate_limits 表：
+ *   key TEXT PRIMARY KEY / count INTEGER / expires_at DATETIME NOT NULL
+ *
+ * @param {object} env - Workers 环境变量
+ * @param {string} key - 限流维度（如 `vc:${email}`）
+ * @param {number} max - 窗口内允许的最大次数
+ * @param {number} windowSeconds - 窗口长度
+ * @returns {Promise<{ limited: boolean, remaining: number }>}
+ */
+export async function rateLimit(env, key, max, windowSeconds) {
+  try {
+    const expiresAt = new Date(Date.now() + windowSeconds * 1000).toISOString();
+    const result = await env.cloud_lens_data
+      .prepare(
+        `INSERT INTO api_rate_limits (key, count, expires_at) VALUES (?, 1, ?)
+         ON CONFLICT(key) DO UPDATE SET
+           count = CASE WHEN expires_at > datetime('now') THEN count + 1 ELSE 1 END,
+           expires_at = CASE WHEN expires_at > datetime('now') THEN expires_at ELSE excluded.expires_at END
+         RETURNING count`,
+      )
+      .bind(key, expiresAt)
+      .first();
+    const count = result?.count ?? 1;
+    return { limited: count > max, remaining: Math.max(0, max - count) };
+  } catch (err) {
+    // 限流表不存在等异常时不阻断业务，仅跳过本次限流判断
+    console.error('[rateLimit] failed:', err);
+    return { limited: false, remaining: max };
+  }
+}
+
+/**
+ * 只读限流检查（不计数）：适合"预检 + 仅失败时计数"的场景，
+ * 避免正常请求也被累计。与 rateLimit 共用同一行数据。
+ */
+export async function checkRateLimit(env, key, max) {
+  try {
+    const row = await env.cloud_lens_data
+      .prepare(`SELECT count FROM api_rate_limits WHERE key = ? AND expires_at > datetime('now')`)
+      .bind(key)
+      .first();
+    return { limited: !!row && row.count > max };
+  } catch (err) {
+    console.error('[checkRateLimit] failed:', err);
+    return { limited: false };
+  }
 }
 
 /**
  * ============ 临时 Token 签名工具（防伪造） ============
  * 使用 SHA-256 对 token 内容签名，防止攻击者伪造 register/reset token
  * token 格式: base64(JSON(payload)) + '.' + base64(SHA-256(signingKey + payload))
+ *
+ * 签名密钥必须通过环境变量 TOKEN_SIGN_KEY 提供（如 `npx wrangler pages secret put TOKEN_SIGN_KEY`）。
+ * 密钥缺失时直接抛错，禁止退回硬编码常量（否则源码公开即等于可伪造任意账号的 token）。
  */
 
-const TOKEN_SIGN_KEY = 'cloud_lens_verify_token_signing_key_v1';
+const MISSING_KEY_MSG = '服务器未配置 TOKEN_SIGN_KEY，请通过 wrangler pages secret put TOKEN_SIGN_KEY 配置后重试';
+
+function getSignKey(env) {
+  const key = env?.TOKEN_SIGN_KEY;
+  if (!key || String(key).length < 16) {
+    throw new Error(MISSING_KEY_MSG);
+  }
+  return String(key);
+}
 
 /**
  * 生成带签名的临时 token
+ * @param {object} env - Workers 环境变量
  * @param {object} payload - { email, purpose, exp }
  * @returns {Promise<string>} 签名后的 token
  */
-export async function signedToken(payload) {
+export async function signedToken(env, payload) {
   const body = btoa(JSON.stringify(payload));
   const enc = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', enc.encode(body + TOKEN_SIGN_KEY));
+  const hashBuffer = await crypto.subtle.digest('SHA-256', enc.encode(body + getSignKey(env)));
   const sig = bufferToBase64(hashBuffer);
   return `${body}.${sig}`;
 }
 
 /**
  * 验证并解析带签名的临时 token
+ * @param {object} env - Workers 环境变量
  * @param {string} token - 签名 token
  * @returns {Promise<object|null>} 解析后的 payload，验证失败返回 null
  */
-export async function verifySignedToken(token) {
+export async function verifySignedToken(env, token) {
+  let signKey;
+  try {
+    signKey = getSignKey(env);
+  } catch {
+    return null;
+  }
+
   const parts = token.split('.');
   if (parts.length !== 2) return null;
   const [body, sig] = parts;
 
   const enc = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', enc.encode(body + TOKEN_SIGN_KEY));
+  const hashBuffer = await crypto.subtle.digest('SHA-256', enc.encode(body + signKey));
   const expectedSig = bufferToBase64(hashBuffer);
 
-  if (sig !== expectedSig) return null;
+  if (!timingSafeEqual(sig, expectedSig)) return null;
 
   try {
     const data = JSON.parse(atob(body));
