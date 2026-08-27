@@ -2,12 +2,13 @@
  * /api/auth/send-code
  *
  * 发送邮箱验证码
- * POST body: { email, purpose: 'register' | 'login' | 'reset' }
+ * POST body: { email, purpose: 'register' | 'login' | 'reset' | 'bind-email' }
  *
  * 需要环境变量：
  * - RESEND_API_KEY: Resend 邮件服务 API Key
  * - MAIL_FROM: 发件地址（如 onboarding@resend.dev 或你的域名邮箱）
  */
+import { rateLimit } from './_utils.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -28,6 +29,18 @@ export async function onRequest({ request, env }) {
 
   if (!['register', 'login', 'reset', 'bind-email'].includes(purpose)) {
     return Response.json({ success: false, error: '无效的 purpose' }, { status: 400 });
+  }
+
+  const emailKey = String(email).toLowerCase();
+
+  // 发送频率限制：同一邮箱同一用途 60 秒内 1 次、每小时最多 6 次（防轰炸）
+  const perMinute = await rateLimit(env, `code:min:${purpose}:${emailKey}`, 1, 60);
+  if (perMinute.limited) {
+    return Response.json({ success: false, error: '发送太频繁，请 60 秒后再试' }, { status: 429 });
+  }
+  const perHour = await rateLimit(env, `code:hour:${purpose}:${emailKey}`, 6, 3600);
+  if (perHour.limited) {
+    return Response.json({ success: false, error: '该邮箱今日验证码发送次数已达上限，请稍后再试' }, { status: 429 });
   }
 
   // 注册前检查：邮箱是否已注册
@@ -67,8 +80,10 @@ export async function onRequest({ request, env }) {
     }
   }
 
-  // 生成 6 位验证码
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  // 生成 6 位验证码（加密安全随机，避免 Math.random 的可预测性）
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  const code = String(buf[0] % 1000000).padStart(6, '0');
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 分钟过期
 
   // 存入数据库（先使该邮箱之前的未使用验证码失效）
@@ -108,8 +123,9 @@ export async function onRequest({ request, env }) {
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      return Response.json({ success: false, error: '邮件发送失败', detail: errText }, { status: 500 });
+      // 不透传 Resend 原始响应，避免泄露内部实现细节
+      console.error('[send-code] Resend API error:', res.status, await res.text());
+      return Response.json({ success: false, error: '邮件发送失败，请稍后重试' }, { status: 500 });
     }
   } catch (err) {
     return Response.json({ success: false, error: '邮件发送失败' }, { status: 500 });

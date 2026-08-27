@@ -7,7 +7,7 @@
  *
  * 重置成功后不自动登录，返回 { success: true }，前端引导回登录页
  */
-import { hashPassword, verifySignedToken } from './_utils.js';
+import { hashPassword, verifySignedToken, validatePassword } from './_utils.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -27,7 +27,7 @@ export async function onRequest({ request, env }) {
   }
 
   // 验证带签名的 token
-  const tokenData = await verifySignedToken(token);
+  const tokenData = await verifySignedToken(env, token);
   if (!tokenData) {
     return Response.json({ success: false, error: '无效的 token' }, { status: 400 });
   }
@@ -42,6 +42,12 @@ export async function onRequest({ request, env }) {
 
   if (Date.now() > tokenData.exp) {
     return Response.json({ success: false, error: 'token 已过期，请重新验证' }, { status: 400 });
+  }
+
+  // 密码基础策略（与注册/改密规则一致）
+  const pwdError = validatePassword(password);
+  if (pwdError) {
+    return Response.json({ success: false, error: pwdError }, { status: 400 });
   }
 
   // 查找用户（优先 user_auth_methods，回退 users 表）
@@ -64,6 +70,9 @@ export async function onRequest({ request, env }) {
 
     // 同步更新 user_auth_methods
     await env.cloud_lens_data.prepare('UPDATE user_auth_methods SET password_hash = ? WHERE user_id = ? AND provider = ?').bind(passwordHash, user.id, 'email').run();
+
+    // 吊销该用户所有已登录会话（密码已被重置，旧会话视为不可信）
+    await env.cloud_lens_data.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id).run();
   } catch (err) {
     return Response.json({ success: false, error: '服务器内部错误' }, { status: 500 });
   }

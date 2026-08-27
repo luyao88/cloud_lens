@@ -208,7 +208,7 @@
           </div>
           <div class="current-email-meta">
             <span class="current-email-label">当前邮箱</span>
-            <span class="current-email-value">{{ user.email }}</span>
+            <span class="current-email-value">{{ user?.email }}</span>
           </div>
           <span class="bound-badge">已验证</span>
         </div>
@@ -372,14 +372,18 @@ const fetchUser = async () => {
 const onAuthChanged = () => fetchUser();
 
 onMounted(async () => {
+  // 先同步注册监听器再发起请求：若 await 期间用户离开页面，
+  // onUnmounted 的 removeEventListener 才能配对移除，避免监听器永久泄漏
+  window.addEventListener('auth:changed', onAuthChanged);
   await fetchUser();
   loading.value = false;
-  window.addEventListener('auth:changed', onAuthChanged);
 });
 
 onUnmounted(() => {
   window.removeEventListener('auth:changed', onAuthChanged);
   if (countdownTimer) clearInterval(countdownTimer);
+  // 兜底移除裁剪拖拽的 window 监听器（拖拽中直接路由跳转的场景）
+  endCropDrag();
 });
 
 async function onLoginSuccess() {
@@ -630,13 +634,14 @@ async function submitPassword() {
       return;
     }
     toast({ title: '密码修改成功，请重新登录' });
+    showPwdDialog.value = false;
+    pwdForm.value = { current: '', next: '', confirm: '', submitting: false };
     // 退出登录，回到门禁引导重新登录
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch {}
     await fetchUser();
     window.dispatchEvent(new Event('auth:changed'));
-    pwdForm.value = { current: '', next: '', confirm: '', submitting: false };
   } catch (err) {
     toast({ title: '网络错误', description: (err as Error).message, variant: 'destructive' });
   } finally {

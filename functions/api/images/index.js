@@ -83,8 +83,11 @@ export async function onRequestPost({ request, env }) {
     return Response.json({ success: false, error: '请先登录' }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { imgur_id, imgur_url, delete_hash, filename, size, tags } = body || {};
+  const body = await request.json().catch(() => null);
+  if (!body) {
+    return Response.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
+  }
+  const { imgur_id, imgur_url, delete_hash, filename, size, tags } = body;
 
   // 校验必填字段
   if (!imgur_url) {

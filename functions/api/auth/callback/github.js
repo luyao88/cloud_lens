@@ -8,6 +8,8 @@
  * 4. 创建 session
  * 5. 设置 Cookie 并跳转回首页
  */
+import { createSession, findOrCreateUser, popupResponse } from '../_utils.js';
+
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
@@ -15,7 +17,7 @@ export async function onRequest({ request, env }) {
 
   if (!code) return new Response('Missing code', { status: 400 });
 
-  // 验证 state 防 CSRF（如果 cookie 中有 state 才验证，本地代理可能丢失 cookie）
+  // 强制校验 state 防 CSRF（/api/auth/github 入口已把 state 写入 cookie）
   const cookieHeader = request.headers.get('Cookie') || '';
   const cookieState = cookieHeader
     .split(';')
@@ -23,10 +25,8 @@ export async function onRequest({ request, env }) {
     .find((c) => c.startsWith('oauth_state='));
   const savedState = cookieState?.split('=')[1];
 
-  if (savedState) {
-    if (!state || state !== savedState) {
-      return new Response('Invalid state', { status: 400 });
-    }
+  if (!savedState || !state || state !== savedState) {
+    return new Response('Invalid or missing state', { status: 400 });
   }
 
   // 1. 用 code 换 access_token
@@ -45,15 +45,15 @@ export async function onRequest({ request, env }) {
       }),
     });
     tokenData = await tokenRes.json();
-  } catch (err) {
-    return new Response(JSON.stringify({ error: 'GitHub API fetch failed', message: err.message }), {
+  } catch {
+    return new Response(JSON.stringify({ error: 'GitHub API fetch failed' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
   if (!tokenData.access_token) {
-    return new Response(JSON.stringify({ error: 'No access token', detail: tokenData }), {
+    return new Response(JSON.stringify({ error: 'No access token' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -71,22 +71,24 @@ export async function onRequest({ request, env }) {
       },
     });
     githubUser = await userRes.json();
-  } catch (err) {
-    return new Response(JSON.stringify({ error: 'GitHub user API failed', message: err.message }), {
+  } catch {
+    return new Response(JSON.stringify({ error: 'GitHub user API failed' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
   if (!githubUser.id) {
-    return new Response(JSON.stringify({ error: 'No user info', detail: githubUser }), {
+    return new Response(JSON.stringify({ error: 'No user info' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  // 3. 如果没有 email，尝试获取
+  // 3. 获取邮箱：只信任「primary 且 verified」的邮箱用于账号合并，
+  //    未验证邮箱仅作记录，不参与 findOrCreateUser 的按邮箱合并（防接管）
   let email = githubUser.email;
+  let emailTrusted = false;
   if (!email) {
     try {
       const emailRes = await fetch('https://api.github.com/user/emails', {
@@ -96,15 +98,15 @@ export async function onRequest({ request, env }) {
         },
       });
       const emails = await emailRes.json();
-      const primaryEmail = emails.find((e) => e.primary);
+      const primaryEmail = Array.isArray(emails) ? emails.find((e) => e.primary && e.verified) : null;
       email = primaryEmail?.email || null;
     } catch {}
   }
+  emailTrusted = !!email;
 
-  // 4. 查找或创建用户（支持邮箱关联合并）
+  // 4. 查找或创建用户（仅已验证邮箱参与按邮箱合并）
   let user;
   try {
-    const { findOrCreateUser } = await import('../_utils.js');
     user = await findOrCreateUser(
       env,
       'github',
@@ -112,54 +114,38 @@ export async function onRequest({ request, env }) {
       email,
       githubUser.login,
       githubUser.avatar_url,
+      { emailTrusted },
     );
-  } catch (err) {
-    return new Response(
-      JSON.stringify({ error: 'Database error (users)', message: err.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    );
+  } catch {
+    return new Response(JSON.stringify({ error: 'Database error (users)' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   // 5. 创建 session
-  const sessionId = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
+  let sessionHeaders;
   try {
-    await env.cloud_lens_data
-      .prepare(`INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)`)
-      .bind(sessionId, user.id, expiresAt.toISOString())
-      .run();
-  } catch (err) {
-    return new Response(
-      JSON.stringify({ error: 'Database error (sessions)', message: err.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    );
+    const result = await createSession(env, user.id, url);
+    sessionHeaders = result.headers;
+  } catch {
+    return new Response(JSON.stringify({ error: 'Database error (sessions)' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
-  // 6. 设置 Cookie 并跳转回首页
   const isHttps = url.protocol === 'https:';
   const secureFlag = isHttps ? '; Secure' : '';
-
-  const headers = new Headers();
-  headers.append('Set-Cookie', `oauth_state=; Path=/; SameSite=Lax; Max-Age=0${secureFlag}`);
-  headers.append('Set-Cookie', `session=${sessionId}; Path=/; SameSite=Lax; Max-Age=2592000${secureFlag}`);
+  sessionHeaders.append('Set-Cookie', `oauth_state=; Path=/; SameSite=Lax; Max-Age=0${secureFlag}`);
 
   // popup 模式：返回 HTML，用 postMessage 通知父窗口后关闭弹窗
   const isPopup = url.searchParams.get('popup') === '1';
   if (isPopup) {
-    // 把 Set-Cookie header 加到 HTML 响应上，确保 session cookie 被设置
-    headers.set('Content-Type', 'text/html; charset=utf-8');
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>登录中...</title></head><body>
-<p>登录成功，正在关闭...</p>
-<script>
-  window.opener.postMessage({ type: 'auth-success' }, '*');
-  setTimeout(() => window.close(), 100);
-<\/script>
-</body></html>`;
-    return new Response(html, { status: 200, headers });
+    return popupResponse(true, null, sessionHeaders, url.origin);
   }
 
   // 普通模式：302 跳转回首页
-  headers.set('Location', '/');
-  return new Response(null, { status: 302, headers });
+  sessionHeaders.set('Location', '/');
+  return new Response(null, { status: 302, headers: sessionHeaders });
 }

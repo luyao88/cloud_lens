@@ -17,7 +17,7 @@ export async function onRequest({ request, env }) {
 
   if (!code) return new Response('Missing code', { status: 400 });
 
-  // 验证 state 防 CSRF
+  // 强制校验 state 防 CSRF（/api/auth/gitee 入口已把 state 写入 cookie）
   const cookieHeader = request.headers.get('Cookie') || '';
   const cookieState = cookieHeader
     .split(';')
@@ -25,10 +25,8 @@ export async function onRequest({ request, env }) {
     .find((c) => c.startsWith('oauth_state='));
   const savedState = cookieState?.split('=')[1];
 
-  if (savedState) {
-    if (!state || state !== savedState) {
-      return new Response('Invalid state', { status: 400 });
-    }
+  if (!savedState || !state || state !== savedState) {
+    return new Response('Invalid or missing state', { status: 400 });
   }
 
   const origin = env.OAUTH_REDIRECT_ORIGIN || url.origin;
@@ -49,16 +47,16 @@ export async function onRequest({ request, env }) {
       }),
     });
     tokenData = await tokenRes.json();
-  } catch (err) {
+  } catch {
     return new Response(
-      JSON.stringify({ error: 'Gitee token fetch failed', message: err.message }),
+      JSON.stringify({ error: 'Gitee token fetch failed' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );
   }
 
   if (!tokenData.access_token) {
     return new Response(
-      JSON.stringify({ error: 'No access token', detail: tokenData }),
+      JSON.stringify({ error: 'No access token' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } },
     );
   }
@@ -72,21 +70,23 @@ export async function onRequest({ request, env }) {
       headers: { Authorization: `Bearer ${access_token}` },
     });
     giteeUser = await userRes.json();
-  } catch (err) {
+  } catch {
     return new Response(
-      JSON.stringify({ error: 'Gitee user API failed', message: err.message }),
+      JSON.stringify({ error: 'Gitee user API failed' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );
   }
 
   if (!giteeUser.id) {
     return new Response(
-      JSON.stringify({ error: 'No user info', detail: giteeUser }),
+      JSON.stringify({ error: 'No user info' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } },
     );
   }
 
   // 3. 查找或创建用户
+  // Gitee 用户信息无邮箱验证标记，emailTrusted 固定为 false：
+  // 邮箱仅作记录，不参与按邮箱的账号合并（防未验证邮箱接管账号）
   let user;
   try {
     user = await findOrCreateUser(
@@ -96,10 +96,11 @@ export async function onRequest({ request, env }) {
       giteeUser.email || null,
       giteeUser.name || giteeUser.login,
       giteeUser.avatar_url,
+      { emailTrusted: false },
     );
-  } catch (err) {
+  } catch {
     return new Response(
-      JSON.stringify({ error: 'Database error (users)', message: err.message }),
+      JSON.stringify({ error: 'Database error (users)' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );
   }
@@ -109,9 +110,9 @@ export async function onRequest({ request, env }) {
   try {
     const result = await createSession(env, user.id, url);
     sessionHeaders = result.headers;
-  } catch (err) {
+  } catch {
     return new Response(
-      JSON.stringify({ error: 'Database error (sessions)', message: err.message }),
+      JSON.stringify({ error: 'Database error (sessions)' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );
   }
