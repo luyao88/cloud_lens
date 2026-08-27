@@ -8,7 +8,7 @@
  * 4. 创建 session
  * 5. 设置 Cookie 并跳转回首页
  */
-import { createSession, findOrCreateUser } from '../_utils.js';
+import { createSession, findOrCreateUser, verifyOAuthState } from '../_utils.js';
 
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
@@ -17,15 +17,8 @@ export async function onRequest({ request, env }) {
 
   if (!code) return new Response('Missing code', { status: 400 });
 
-  // 强制校验 state 防 CSRF（/api/auth/gitee 入口已把 state 写入 cookie）
-  const cookieHeader = request.headers.get('Cookie') || '';
-  const cookieState = cookieHeader
-    .split(';')
-    .map((c) => c.trim())
-    .find((c) => c.startsWith('oauth_state='));
-  const savedState = cookieState?.split('=')[1];
-
-  if (!savedState || !state || state !== savedState) {
+  // 强制校验 state 防 CSRF：cookie 或服务端记录任一命中即可
+  if (!(await verifyOAuthState({ env, request, state }))) {
     return new Response('Invalid or missing state', { status: 400 });
   }
 

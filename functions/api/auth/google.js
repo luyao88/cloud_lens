@@ -5,6 +5,8 @@
  * 支持 popup 模式：带 ?popup=1 时回调用 cookie 传递 popup 标记
  * 注意：Google 严格要求 redirect_uri 精确匹配（不能带 query 参数）
  */
+import { rememberOAuthState } from './_utils.js';
+
 export async function onRequest({ request, env }) {
   const state = crypto.randomUUID();
 
@@ -23,7 +25,8 @@ export async function onRequest({ request, env }) {
   url.searchParams.set('state', state);
   url.searchParams.set('prompt', 'select_account');
 
-  // 把 state 和 popup 标记存到 cookie 里防 CSRF + 传递 popup 模式
+  // 把 state 存到 cookie + 服务端（跨域名部署时 cookie 可能带不到回调）
+  await rememberOAuthState(env, state);
   const headers = new Headers();
   const cookieParts = [`oauth_state=${state}; Path=/; SameSite=Lax; Max-Age=600`];
   if (isPopup) {

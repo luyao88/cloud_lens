@@ -425,6 +425,61 @@ export async function verifySignedToken(env, token) {
 }
 
 /**
+ * ============ OAuth state 防 CSRF（cookie + 服务端存储双通道） ============
+ *
+ * 仅靠 cookie 校验 state 有一个部署盲区：当站点访问域名与回调域名
+ * （OAUTH_REDIRECT_ORIGIN，如绑定自定义域 vs *.pages.dev）不一致时，
+ * 入口在 A 域写的 oauth_state cookie 不会随浏览器带到 B 域的回调请求，
+ * 强制校验会导致所有第三方登录失败。
+ *
+ * 因此入口把 state 同时写入 oauth_states 表（TTL 10 分钟），
+ * 回调侧「cookie 匹配」或「消费一条服务端记录（DELETE..RETURNING 原子一次性）」
+ * 任一命中即放行，其余一律拒绝。
+ */
+
+const OAUTH_STATE_TTL_MINUTES = 10;
+
+/** OAuth 入口调用：登记本次授权流程的 state */
+export async function rememberOAuthState(env, state) {
+  try {
+    await env.cloud_lens_data.prepare('INSERT INTO oauth_states (state) VALUES (?)').bind(state).run();
+    // 顺手清理过期记录，失败不影响主流程
+    await env.cloud_lens_data.prepare(`DELETE FROM oauth_states WHERE created_at < datetime('now', '-${OAUTH_STATE_TTL_MINUTES} minutes')`).run();
+  } catch (err) {
+    console.error('[oauth] rememberState failed:', err);
+  }
+}
+
+/**
+ * OAuth 回调调用：校验并一次性消费 state
+ * @returns {Promise<boolean>} true 表示合法
+ */
+export async function verifyOAuthState({ env, request, state }) {
+  if (!state) return false;
+
+  // 1. cookie 匹配（同域名部署的标准路径）
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const cookieEntry = cookieHeader
+    .split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith('oauth_state='));
+  const cookieState = cookieEntry?.split('=')[1];
+  if (cookieState && state === cookieState) return true;
+
+  // 2. 服务端记录匹配（跨域名部署），DELETE..RETURNING 保证一条记录只能被消费一次
+  try {
+    const consumed = await env.cloud_lens_data
+      .prepare('DELETE FROM oauth_states WHERE state = ? AND created_at >= datetime(\'now\', \'-' + OAUTH_STATE_TTL_MINUTES + ' minutes\') RETURNING state')
+      .bind(state)
+      .first();
+    return !!consumed;
+  } catch (err) {
+    console.error('[oauth] verifyState failed:', err);
+    return false;
+  }
+}
+
+/**
  * 统一的安全错误响应（不泄露内部错误细节）
  */
 export function safeError(message, status = 500) {

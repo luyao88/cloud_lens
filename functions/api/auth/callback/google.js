@@ -8,7 +8,7 @@
  * 4. 创建 session
  * 5. 设置 Cookie 并跳转回首页（或 popup 模式返回 postMessage HTML）
  */
-import { popupResponse, createSession, findOrCreateUser } from '../_utils.js';
+import { popupResponse, createSession, findOrCreateUser, verifyOAuthState } from '../_utils.js';
 
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
@@ -24,14 +24,8 @@ export async function onRequest({ request, env }) {
 
   if (!code) return new Response('Missing code', { status: 400 });
 
-  // 强制校验 state 防 CSRF（/api/auth/google 入口已把 state 写入 cookie）
-  const cookieState = cookieHeader
-    .split(';')
-    .map((c) => c.trim())
-    .find((c) => c.startsWith('oauth_state='));
-  const savedState = cookieState?.split('=')[1];
-
-  if (!savedState || !state || state !== savedState) {
+  // 强制校验 state 防 CSRF：cookie 或服务端记录任一命中即可
+  if (!(await verifyOAuthState({ env, request, state }))) {
     return new Response('Invalid or missing state', { status: 400 });
   }
 
@@ -130,7 +124,8 @@ export async function onRequest({ request, env }) {
   // 5. popup 模式返回 HTML，否则 302 跳转
   if (isPopup) {
     // postMessage 目标 origin 收敛为本站，避免向任意页面广播登录状态
-    return popupResponse(true, null, sessionHeaders, url.origin);
+    // targetOrigin 用 '*'：opener 页面域名可能与回调域不同（如 pages.dev 访问自定义域后端）
+    return popupResponse(true, null, sessionHeaders);
   }
 
   sessionHeaders.set('Location', '/');

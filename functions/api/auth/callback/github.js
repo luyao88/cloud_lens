@@ -8,7 +8,7 @@
  * 4. 创建 session
  * 5. 设置 Cookie 并跳转回首页
  */
-import { createSession, findOrCreateUser, popupResponse } from '../_utils.js';
+import { createSession, findOrCreateUser, popupResponse, verifyOAuthState } from '../_utils.js';
 
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
@@ -17,15 +17,8 @@ export async function onRequest({ request, env }) {
 
   if (!code) return new Response('Missing code', { status: 400 });
 
-  // 强制校验 state 防 CSRF（/api/auth/github 入口已把 state 写入 cookie）
-  const cookieHeader = request.headers.get('Cookie') || '';
-  const cookieState = cookieHeader
-    .split(';')
-    .map((c) => c.trim())
-    .find((c) => c.startsWith('oauth_state='));
-  const savedState = cookieState?.split('=')[1];
-
-  if (!savedState || !state || state !== savedState) {
+  // 强制校验 state 防 CSRF：cookie 或服务端记录任一命中即可
+  if (!(await verifyOAuthState({ env, request, state }))) {
     return new Response('Invalid or missing state', { status: 400 });
   }
 
@@ -140,9 +133,10 @@ export async function onRequest({ request, env }) {
   sessionHeaders.append('Set-Cookie', `oauth_state=; Path=/; SameSite=Lax; Max-Age=0${secureFlag}`);
 
   // popup 模式：返回 HTML，用 postMessage 通知父窗口后关闭弹窗
+  // targetOrigin 用 '*'：opener 页面域名可能与回调域不同（如 pages.dev 访问自定义域后端）
   const isPopup = url.searchParams.get('popup') === '1';
   if (isPopup) {
-    return popupResponse(true, null, sessionHeaders, url.origin);
+    return popupResponse(true, null, sessionHeaders);
   }
 
   // 普通模式：302 跳转回首页

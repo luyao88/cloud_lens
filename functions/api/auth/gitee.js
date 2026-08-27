@@ -3,6 +3,8 @@
  *
  * Gitee OAuth 登录入口，重定向到 Gitee 授权页面
  */
+import { rememberOAuthState } from './_utils.js';
+
 export async function onRequest({ request, env }) {
   const state = crypto.randomUUID();
 
@@ -18,7 +20,8 @@ export async function onRequest({ request, env }) {
   url.searchParams.set('scope', 'user_info');
   url.searchParams.set('state', state);
 
-  // 把 state 存到 cookie 里防 CSRF
+  // 把 state 存到 cookie + 服务端（跨域名部署时 cookie 可能带不到回调）
+  await rememberOAuthState(env, state);
   const headers = new Headers();
   headers.set('Set-Cookie', `oauth_state=${state}; Path=/; SameSite=Lax; Max-Age=600`);
   headers.set('Location', url.toString());

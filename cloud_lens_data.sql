@@ -140,3 +140,14 @@ CREATE TABLE IF NOT EXISTS api_rate_limits (
 );
 
 CREATE INDEX IF NOT EXISTS idx_rate_limits_expires ON api_rate_limits(expires_at);
+
+
+-- ======================
+-- OAuth state 表（防 CSRF，跨域名部署兜底）
+-- 入口把 state 写入此表，回调侧消费（一次性）；TTL 10 分钟由代码清理
+-- 与 api_rate_limits 同为线上必跑迁移
+-- ======================
+CREATE TABLE IF NOT EXISTS oauth_states (
+  state TEXT PRIMARY KEY,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
