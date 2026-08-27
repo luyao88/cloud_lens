@@ -244,14 +244,6 @@ const uploadItem = (item: UploadItem) => {
     item.error = '网络异常，连接中断';
     toast({ title: '上传失败', description: `${item.name}：网络异常，连接中断`, variant: 'destructive' });
   };
-  // abort 不触发 onload/onerror：移除"上传中"条目会走这里释放并发槽位，
-  // 否则 activeCount 永不回落，MAX_CONCURRENT 个槽位泄漏后新上传全部卡在等待中
-  xhr.onabort = () => {
-    if (item.xhr === xhr) {
-      item.xhr = null;
-      finishCurrent();
-    }
-  };
   xhr.send(formData);
 };
 

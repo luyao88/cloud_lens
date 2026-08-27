@@ -125,18 +125,3 @@ CREATE TABLE IF NOT EXISTS verification_codes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_verify_email ON verification_codes(email);
-
-
--- ======================
--- 接口限流表（固定窗口计数）
--- 用于验证码发送/校验、登录失败等接口的暴力破解与轰炸防护
--- 已部署的线上库需手动执行这一段：
---   wrangler d1 execute cloud_lens_data --remote --file=cloud_lens_data.sql
--- ======================
-CREATE TABLE IF NOT EXISTS api_rate_limits (
-  key TEXT PRIMARY KEY,                 -- 限流维度，如 `vc:xxx@yy.com`、`login:xxx@yy.com`
-  count INTEGER NOT NULL DEFAULT 1,
-  expires_at DATETIME NOT NULL          -- 窗口截止时间（ISO 字符串，UTC）
-);
-
-CREATE INDEX IF NOT EXISTS idx_rate_limits_expires ON api_rate_limits(expires_at);

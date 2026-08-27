@@ -7,7 +7,7 @@
  *
  * 注册成功后自动创建 session 并返回 cookie
  */
-import { hashPassword, createSession, verifySignedToken, validatePassword } from './_utils.js';
+import { hashPassword, createSession, verifySignedToken } from './_utils.js';
 
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') {
@@ -27,7 +27,7 @@ export async function onRequest({ request, env }) {
   }
 
   // 验证带签名的 token
-  const tokenData = await verifySignedToken(env, token);
+  const tokenData = await verifySignedToken(token);
   if (!tokenData) {
     return Response.json({ success: false, error: '无效的 token' }, { status: 400 });
   }
@@ -42,12 +42,6 @@ export async function onRequest({ request, env }) {
 
   if (Date.now() > tokenData.exp) {
     return Response.json({ success: false, error: 'token 已过期，请重新验证' }, { status: 400 });
-  }
-
-  // 密码基础策略（与登录/改密规则一致）
-  const pwdError = validatePassword(password);
-  if (pwdError) {
-    return Response.json({ success: false, error: pwdError }, { status: 400 });
   }
 
   // 再次检查邮箱是否已注册（防止并发）

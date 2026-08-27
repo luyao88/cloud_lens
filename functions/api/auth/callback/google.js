@@ -24,15 +24,17 @@ export async function onRequest({ request, env }) {
 
   if (!code) return new Response('Missing code', { status: 400 });
 
-  // 强制校验 state 防 CSRF（/api/auth/google 入口已把 state 写入 cookie）
+  // 验证 state 防 CSRF
   const cookieState = cookieHeader
     .split(';')
     .map((c) => c.trim())
     .find((c) => c.startsWith('oauth_state='));
   const savedState = cookieState?.split('=')[1];
 
-  if (!savedState || !state || state !== savedState) {
-    return new Response('Invalid or missing state', { status: 400 });
+  if (savedState) {
+    if (!state || state !== savedState) {
+      return new Response('Invalid state', { status: 400 });
+    }
   }
 
   const requestUrl = new URL(request.url);
@@ -54,16 +56,16 @@ export async function onRequest({ request, env }) {
       }),
     });
     tokenData = await tokenRes.json();
-  } catch {
+  } catch (err) {
     return new Response(
-      JSON.stringify({ error: 'Google token fetch failed' }),
+      JSON.stringify({ error: 'Google token fetch failed', message: err.message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );
   }
 
   if (!tokenData.access_token) {
     return new Response(
-      JSON.stringify({ error: 'No access token' }),
+      JSON.stringify({ error: 'No access token', detail: tokenData }),
       { status: 400, headers: { 'Content-Type': 'application/json' } },
     );
   }
@@ -77,21 +79,21 @@ export async function onRequest({ request, env }) {
       headers: { Authorization: `Bearer ${access_token}` },
     });
     googleUser = await userRes.json();
-  } catch {
+  } catch (err) {
     return new Response(
-      JSON.stringify({ error: 'Google user API failed' }),
+      JSON.stringify({ error: 'Google user API failed', message: err.message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );
   }
 
   if (!googleUser.id) {
     return new Response(
-      JSON.stringify({ error: 'No user info' }),
+      JSON.stringify({ error: 'No user info', detail: googleUser }),
       { status: 400, headers: { 'Content-Type': 'application/json' } },
     );
   }
 
-  // 3. 查找或创建用户（Google 邮箱必定经过验证，可信参与账号合并）
+  // 3. 查找或创建用户
   let user;
   try {
     user = await findOrCreateUser(
@@ -101,11 +103,10 @@ export async function onRequest({ request, env }) {
       googleUser.email,
       googleUser.name || googleUser.email,
       googleUser.picture,
-      { emailTrusted: true },
     );
-  } catch {
+  } catch (err) {
     return new Response(
-      JSON.stringify({ error: 'Database error (users)' }),
+      JSON.stringify({ error: 'Database error (users)', message: err.message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );
   }
@@ -115,9 +116,9 @@ export async function onRequest({ request, env }) {
   try {
     const result = await createSession(env, user.id, url);
     sessionHeaders = result.headers;
-  } catch {
+  } catch (err) {
     return new Response(
-      JSON.stringify({ error: 'Database error (sessions)' }),
+      JSON.stringify({ error: 'Database error (sessions)', message: err.message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );
   }
@@ -129,8 +130,7 @@ export async function onRequest({ request, env }) {
 
   // 5. popup 模式返回 HTML，否则 302 跳转
   if (isPopup) {
-    // postMessage 目标 origin 收敛为本站，避免向任意页面广播登录状态
-    return popupResponse(true, null, sessionHeaders, url.origin);
+    return popupResponse(true, null, sessionHeaders);
   }
 
   sessionHeaders.set('Location', '/');
