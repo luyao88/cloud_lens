@@ -8,7 +8,7 @@
  * 4. 创建 session
  * 5. 设置 Cookie 并跳转回首页
  */
-import { createSession, findOrCreateUser, popupResponse, verifyOAuthState } from '../_utils.js';
+import { createSession, findOrCreateUser, popupResponse, resolveOAuthState, performOAuthBind } from '../_utils.js';
 
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
@@ -17,8 +17,9 @@ export async function onRequest({ request, env }) {
 
   if (!code) return new Response('Missing code', { status: 400 });
 
-  // 强制校验 state 防 CSRF：cookie 或服务端记录任一命中即可
-  if (!(await verifyOAuthState({ env, request, state }))) {
+  // 校验 state（签名优先，旧版兼容兜底）并区分 登录/绑定 模式
+  const resolved = await resolveOAuthState({ env, request, url });
+  if (!resolved) {
     return new Response('Invalid or missing state', { status: 400 });
   }
 
@@ -96,6 +97,11 @@ export async function onRequest({ request, env }) {
     } catch {}
   }
   emailTrusted = !!email;
+
+  // 绑定模式：把该第三方身份关联到当前会话用户，不创建/切换登录态
+  if (resolved.mode === 'bind') {
+    return performOAuthBind(env, request, resolved.uid, 'github', String(githubUser.id), email || null, githubUser.avatar_url);
+  }
 
   // 4. 查找或创建用户（仅已验证邮箱参与按邮箱合并）
   let user;

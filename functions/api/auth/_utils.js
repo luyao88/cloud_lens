@@ -451,7 +451,29 @@ export async function rememberOAuthState(env, state) {
 }
 
 /**
- * OAuth 回调调用：校验并一次性消费 state
+ * 生成签名 state：
+ * - 登录模式（uid=null）：匿名防伪造标记
+ * - 绑定模式（uid=当前用户ID）：回调据此还原「这是绑定操作而非登录」，
+ *   不依赖 cookie 即可跨域名工作
+ * 未配置 TOKEN_SIGN_KEY 时返回 null（调用方降级为旧版 UUID 流程）
+ */
+export async function makeOAuthState(env, uid = null) {
+  const payload = {
+    v: 1,
+    uid,
+    purpose: uid === null ? 'oauth-login' : 'oauth-bind',
+    exp: Date.now() + OAUTH_STATE_TTL_MINUTES * 60 * 1000,
+  };
+  try {
+    return await signedToken(env, payload);
+  } catch (err) {
+    console.error('[oauth] makeOAuthState failed:', err);
+    return null;
+  }
+}
+
+/**
+ * OAuth 回调调用：校验并一次性消费 state（旧版 UUID 兼容通道）
  * @returns {Promise<boolean>} true 表示合法
  */
 export async function verifyOAuthState({ env, request, state }) {
@@ -477,6 +499,98 @@ export async function verifyOAuthState({ env, request, state }) {
     console.error('[oauth] verifyState failed:', err);
     return false;
   }
+}
+
+const OAUTH_SIGNED_PURPOSES = ['oauth-login', 'oauth-bind'];
+
+/**
+ * 解析回调携带的 state，返回 { mode: 'login'|'bind', uid }；
+ * 依次尝试：新版签名 state → 旧版 UUID（cookie / 服务端一次性记录）。都不匹配返回 null
+ */
+export async function resolveOAuthState({ env, request, url }) {
+  const state = url.searchParams.get('state');
+  if (!state) return null;
+
+  // 1. 新版签名 state
+  const payload = await verifySignedToken(env, state);
+  if (payload && OAUTH_SIGNED_PURPOSES.includes(payload.purpose) && Date.now() <= payload.exp) {
+    const isBind = payload.purpose === 'oauth-bind' && Number.isInteger(payload.uid) && payload.uid > 0;
+    return { mode: isBind ? 'bind' : 'login', uid: isBind ? payload.uid : null };
+  }
+
+  // 2. 旧版 UUID 兼容（仅登录语义）
+  if (await verifyOAuthState({ env, request, state })) {
+    return { mode: 'login', uid: null };
+  }
+  return null;
+}
+
+/**
+ * 绑定流程执行体：把第三方身份关联到当前会话用户。
+ * 与登录流程的关键区别——绝不创建或切换 session。
+ * 成功/失败均返回自动跳回设置页的结果 HTML，由页面 toast 展示。
+ */
+export async function performOAuthBind(env, request, expectedUid, provider, providerId, email, avatarUrl) {
+  const { user } = await getUserFromRequest(request, env);
+  if (!user || user.id !== expectedUid) {
+    return bindResultPage(provider, false, '登录状态已变化，请重新进入设置页操作');
+  }
+
+  // 幂等/冲突检查先行：已绑到本账号直接成功返回，避免误报其他校验错误
+  const existing = await env.cloud_lens_data
+    .prepare('SELECT user_id FROM user_auth_methods WHERE provider = ? AND provider_id = ?')
+    .bind(provider, String(providerId))
+    .first();
+  if (existing) {
+    return existing.user_id === user.id
+      ? bindResultPage(provider, true, '该第三方账号已绑定到当前账号')
+      : bindResultPage(provider, false, '该第三方账号已被其他账号绑定');
+  }
+
+  // 规则：账号未绑定邮箱前，不允许再绑定其他第三方（先有可找回的身份锚点）
+  if (provider !== 'email') {
+    const methods = await getUserAuthMethods(env, user.id);
+    const hasEmailAnchor =
+      (Array.isArray(methods) && methods.some((m) => m.provider === 'email')) || !!user.email;
+    if (!hasEmailAnchor) {
+      return bindResultPage(provider, false, '当前账号未绑定邮箱，请先绑定邮箱后再绑定第三方账号');
+    }
+  }
+
+  try {
+    await env.cloud_lens_data
+      .prepare('INSERT INTO user_auth_methods (user_id, provider, provider_id, email) VALUES (?, ?, ?, ?)')
+      .bind(user.id, provider, String(providerId), email || null)
+      .run();
+  } catch (err) {
+    console.error('[oauth-bind] insert failed:', err);
+    return bindResultPage(provider, false, '绑定失败，请稍后重试');
+  }
+
+  // 当前用户没有头像时用第三方的补全
+  if (avatarUrl && !user.avatar_url) {
+    await env.cloud_lens_data.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').bind(avatarUrl, user.id).run();
+  }
+
+  return bindResultPage(provider, true, '绑定成功');
+}
+
+/** 绑定结果落地页：自动跳回 /settings 并通过 query 带回结果供页面 toast */
+export function bindResultPage(provider, ok, message) {
+  const safeMsg = String(message || '').replace(/[<>&"]/g, '');
+  const q = new URLSearchParams({
+    bind_provider: provider,
+    bind_status: ok ? 'success' : 'error',
+    bind_msg: safeMsg,
+  }).toString();
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>绑定结果</title></head><body>
+<p>${ok ? '✅' : '❌'} ${safeMsg || (ok ? '操作成功' : '操作失败')}，正在返回设置页...</p>
+<script>location.replace('/settings?' + ${JSON.stringify(q)});</script>
+</body></html>`;
+  return new Response(html, {
+    status: ok ? 200 : 400,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
 }
 
 /**

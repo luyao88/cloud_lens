@@ -894,6 +894,23 @@ function bindOAuth(provider: string) {
   }, 500);
 }
 
+// 授权完成跳回 /settings 时，消费回调带回的结果参数并清理 URL。
+// 绑定成功后 fetchUser 会重新拉取 auth_methods，绑定徽标随之刷新。
+function consumeBindResult() {
+  const sp = new URLSearchParams(window.location.search);
+  const status = sp.get('bind_status');
+  if (!status) return;
+  const p = sp.get('bind_provider') || '';
+  const msg = sp.get('bind_msg') || '';
+  if (status === 'success') {
+    toast({ title: `${providerLabel(p)}已绑定`, description: msg || undefined });
+  } else {
+    toast({ title: '第三方账号绑定失败', description: msg || undefined, variant: 'destructive' });
+  }
+  window.history.replaceState({}, '', '/settings');
+}
+consumeBindResult();
+
 // ===== 注销账号 =====
 async function confirmDeleteAccount() {
   showDeleteConfirm.value = false;
