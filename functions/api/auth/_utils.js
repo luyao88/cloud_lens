@@ -380,11 +380,18 @@ function getSignKey(env) {
 /**
  * 生成带签名的临时 token
  * @param {object} env - Workers 环境变量
- * @param {object} payload - { email, purpose, exp }
+ * @param {object} payload - 如 { email, purpose, exp } 或 OAuth state { purpose, uid, exp }
  * @returns {Promise<string>} 签名后的 token
+ *
+ * body 使用 base64url 编码：OAuth state 会原样出现在第三方授权回跳 URL 里，
+ * 标准 base64 的 +/= 字符在部分提供商的重定向链上会被转义破坏。
  */
 export async function signedToken(env, payload) {
-  const body = btoa(JSON.stringify(payload));
+  const json = JSON.stringify(payload);
+  const bytes = new TextEncoder().encode(json);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  const body = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const enc = new TextEncoder();
   const hashBuffer = await crypto.subtle.digest('SHA-256', enc.encode(body + getSignKey(env)));
   const sig = bufferToBase64(hashBuffer);
@@ -395,7 +402,9 @@ export async function signedToken(env, payload) {
  * 验证并解析带签名的临时 token
  * @param {object} env - Workers 环境变量
  * @param {string} token - 签名 token
- * @returns {Promise<object|null>} 解析后的 payload，验证失败返回 null
+ * @returns {Promise<object|null>} 解析后的 payload，验证失败返回 null。
+ * 注意：email 不是通用必填字段（OAuth state 只有 purpose/uid/exp）；
+ * 需要 email 的用途（register/reset/bind-email）由各端点自行校验 email 匹配。
  */
 export async function verifySignedToken(env, token) {
   let signKey;
@@ -405,9 +414,11 @@ export async function verifySignedToken(env, token) {
     return null;
   }
 
+  if (typeof token !== 'string') return null;
   const parts = token.split('.');
   if (parts.length !== 2) return null;
   const [body, sig] = parts;
+  if (!body || !sig) return null;
 
   const enc = new TextEncoder();
   const hashBuffer = await crypto.subtle.digest('SHA-256', enc.encode(body + signKey));
@@ -416,11 +427,25 @@ export async function verifySignedToken(env, token) {
   if (!timingSafeEqual(sig, expectedSig)) return null;
 
   try {
-    const data = JSON.parse(atob(body));
-    if (!data.email || !data.purpose || !data.exp) return null;
+    const data = JSON.parse(decodeTokenBody(body));
+    if (!data || typeof data !== 'object') return null;
+    if (!data.purpose || !data.exp) return null;
+    // 过期不在此处拒绝：注册/重置等端点有各自的「token 已过期」文案；
+    // OAuth 侧由 resolveOAuthState 统一做时效校验
     return data;
   } catch {
     return null;
+  }
+}
+
+/** 解码 token body：优先新版 base64url，兼容旧版标准 base64 */
+function decodeTokenBody(body) {
+  try {
+    const b64url = body.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64url.padEnd(Math.ceil(b64url.length / 4) * 4, '=');
+    return atob(padded);
+  } catch {
+    return atob(body);
   }
 }
 
