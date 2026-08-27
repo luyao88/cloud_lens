@@ -28,8 +28,9 @@
     </div>
   </section>
 
-  <!-- 上传目标相册（登录后显示；同步完成前不渲染，避免闪空白） -->
-  <div v-if="uploadLoggedIn && albumsLoaded && !stateSyncing" class="upload-album-bar">
+  <!-- 上传目标相册：始终渲染（不依赖登录/加载状态，避免闪现）；
+       未登录时仅显示无相册的默认选项，操作时提示登录 -->
+  <div class="upload-album-bar">
     <svg class="album-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect width="18" height="18" x="3" y="3" rx="2" />
       <circle cx="9" cy="9" r="2" />
@@ -41,10 +42,10 @@
       <option value="none">未分组</option>
       <option v-for="opt in albumOptions" :key="opt.id" :value="String(opt.id)">{{ opt.label }}</option>
     </select>
-    <button v-if="targetAlbum !== undefined" class="album-bar-btn" :disabled="settingDefault" @click="setDefaultAlbum">
+    <button v-if="targetAlbum !== undefined" class="album-bar-btn album-bar-btn-sm" :disabled="settingDefault" @click="setDefaultAlbum">
       {{ settingDefault ? '设置中...' : '设为默认' }}
     </button>
-    <button class="album-bar-btn" @click="openCreateDialog">＋ 新建相册</button>
+    <button class="album-bar-btn album-bar-btn-sm" @click="openCreateDialog">＋ 相册</button>
   </div>
 
   <!-- 新建相册弹窗 -->
@@ -69,7 +70,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { useUploadManager } from '@/composables/useUploadManager';
 const { toast } = useToast();
 // 上传队列由全局管理器维护，切换页面不会中断
-const { items, addFiles, targetAlbum, setTargetAlbum, albums, albumTreeOptions, defaultAlbumId, fetchAlbums, refreshUploadState, uploadLoggedIn, albumsLoaded, stateSyncing } = useUploadManager();
+const { items, addFiles, targetAlbum, setTargetAlbum, albums, albumTreeOptions, defaultAlbumId, fetchAlbums, refreshUploadState, uploadLoggedIn } = useUploadManager();
 // 参数
 const props = defineProps(['UploadConfig']);
 const UploadConfig = ref<any>(props.UploadConfig);
@@ -91,8 +92,21 @@ const defaultAlbumLabel = computed(() => {
   return hit?.name || '未分组';
 });
 
+// 未登录时允许浏览但拦截写操作，统一提示登录
+const requireLogin = (): boolean => {
+  if (uploadLoggedIn.value) return true;
+  toast({ title: '请先登录', description: '登录后可选择上传位置、创建相册', variant: 'destructive' });
+  return false;
+};
+
 const onSelectChange = (e: Event) => {
-  const v = (e.target as HTMLSelectElement).value;
+  const el = e.target as HTMLSelectElement;
+  if (!requireLogin()) {
+    // 还原为当前生效值
+    el.value = selectValue.value;
+    return;
+  }
+  const v = el.value;
   if (v === 'default') setTargetAlbum(undefined);
   else if (v === 'none') setTargetAlbum(null);
   else setTargetAlbum(Number(v));
@@ -102,6 +116,7 @@ const onSelectChange = (e: Event) => {
 const settingDefault = ref(false);
 const setDefaultAlbum = async () => {
   if (targetAlbum.value === undefined || settingDefault.value) return;
+  if (!requireLogin()) return;
   settingDefault.value = true;
   try {
     const res = await fetch('/api/albums/default', {
@@ -129,6 +144,7 @@ const createName = ref('');
 const creating = ref(false);
 
 const openCreateDialog = () => {
+  if (!requireLogin()) return;
   createName.value = '';
   createOpen.value = true;
 };

@@ -231,3 +231,19 @@
     cursor: not-allowed;
   }
 }
+
+// 小号变体：位置条空间有限，功能按钮更紧凑
+.album-bar-btn-sm {
+  height: 1.7rem;
+  padding: 0 0.55rem;
+  font-size: 0.72rem;
+  border-radius: 0.4rem;
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    color: #03b6aa;
+    border-color: rgba(3, 182, 170, 0.4);
+    background: rgba(3, 182, 170, 0.06);
+    outline: none;
+  }
+}
