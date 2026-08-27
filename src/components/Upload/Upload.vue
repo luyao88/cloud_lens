@@ -62,11 +62,15 @@
       </div>
     </DialogContent>
   </Dialog>
+
+  <!-- 未登录操作相册时弹出的登录弹窗 -->
+  <AuthDialog v-model:open="authOpen" @success="onAuthDialogSuccess" />
 </template>
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useToast } from '@/components/ui/toast/use-toast';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 import { useUploadManager } from '@/composables/useUploadManager';
 const { toast } = useToast();
 // 上传队列由全局管理器维护，切换页面不会中断
@@ -92,11 +96,17 @@ const defaultAlbumLabel = computed(() => {
   return hit?.name || '未分组';
 });
 
-// 未登录时允许浏览但拦截写操作，统一提示登录
+// 未登录时允许浏览但拦截写操作：弹出登录弹窗引导登录
+const authOpen = ref(false);
 const requireLogin = (): boolean => {
   if (uploadLoggedIn.value) return true;
-  toast({ title: '请先登录', description: '登录后可选择上传位置、创建相册', variant: 'destructive' });
+  authOpen.value = true;
   return false;
+};
+
+// 登录弹窗成功：广播事件触发全局状态刷新（useUploadManager 拉取相册、Header 刷新用户）
+const onAuthDialogSuccess = () => {
+  window.dispatchEvent(new Event('auth:changed'));
 };
 
 const onSelectChange = (e: Event) => {

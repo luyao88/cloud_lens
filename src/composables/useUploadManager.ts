@@ -71,20 +71,26 @@ const refreshUploadState = async (): Promise<void> => {
     if (token !== syncToken) return;
     uploadLoggedIn.value = loggedInNow;
 
-    if (loggedInNow) {
-      try {
-        const res = await fetch('/api/albums');
-        const data = await res.json();
-        if (token !== syncToken) return;
-        if (data.success) {
-          albums.value = data.albums || [];
-          defaultAlbumId.value = data.default_album_id ?? null;
-          albumsLoaded.value = true;
-        }
-      } catch {
-        // 网络异常时保留旧列表
-        if (token === syncToken) albumsLoaded.value = albums.value.length > 0 || albumsLoaded.value;
+    // 登出/会话失效：清空相册相关状态，恢复「无相册」默认视图
+    if (!loggedInNow) {
+      albums.value = [];
+      defaultAlbumId.value = null;
+      if (targetAlbum.value !== undefined) setTargetAlbum(undefined);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/albums');
+      const data = await res.json();
+      if (token !== syncToken) return;
+      if (data.success) {
+        albums.value = data.albums || [];
+        defaultAlbumId.value = data.default_album_id ?? null;
+        albumsLoaded.value = true;
       }
+    } catch {
+      // 网络异常时保留旧列表
+      if (token === syncToken) albumsLoaded.value = albums.value.length > 0 || albumsLoaded.value;
     }
   } finally {
     if (token === syncToken) stateSyncing.value = false;
