@@ -11,6 +11,18 @@
         <p><input :value="i.upload_result ? formatURL(props, i.upload_result) : ''" type="text" readonly @click="i.upload_result && copyCodeValue(formatURL(props, i.upload_result))" /> <span>URL</span></p>
         <p><input :value="i.upload_result ? formatURL(props, i.upload_result, 'md') : ''" type="text" readonly @click="i.upload_result && copyCodeValue(formatURL(props, i.upload_result, 'md'))" /> <span>Markdown</span></p>
         <p><input :value="i.upload_result ? formatURL(props, i.upload_result, 'html') : ''" type="text" readonly @click="i.upload_result && copyCodeValue(formatURL(props, i.upload_result, 'html'))" /> <span>HTML</span></p>
+        <!-- 单图相册选择器：上传成功且已保存到数据库时显示 -->
+        <div v-if="i.upload_result && i.db_image_id" class="album-picker">
+          <svg class="picker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <circle cx="9" cy="9" r="2" />
+            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+          </svg>
+          <select class="picker-select" :value="i.saved_album_id === null ? 'none' : String(i.saved_album_id)" @change="onItemAlbumChange(i, $event)" title="选择相册">
+            <option value="none">未分组</option>
+            <option v-for="opt in albumTreeOptions" :key="opt.id" :value="String(opt.id)">{{ opt.label }}</option>
+          </select>
+        </div>
       </div>
       <HoverCard v-if="i.upload_result" :open-delay="0" :close-delay="0">
         <HoverCardTrigger as-child>
@@ -36,9 +48,18 @@ import { formatURL } from '@/utils/index';
 import { useToast } from '@/components/ui/toast/use-toast';
 const { toast } = useToast();
 import LoadingImg from '@/assets/images/loading.gif';
+import { useUploadManager } from '@/composables/useUploadManager';
+const { albumTreeOptions, changeItemAlbum } = useUploadManager();
 const props = defineProps(['modelValue', 'nodeHost']);
 const emits = defineEmits(['update:modelValue']);
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+
+// 单图相册变更
+const onItemAlbumChange = (item: any, e: Event) => {
+  const v = (e.target as HTMLSelectElement).value;
+  const albumId = v === 'none' ? null : Number(v);
+  changeItemAlbum(item, albumId);
+};
 
 // ViewImage 图片+视频预览
 declare const ViewImage: any;

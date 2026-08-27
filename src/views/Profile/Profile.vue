@@ -24,7 +24,7 @@
         <div class="profile-banner"></div>
         <div class="profile-body">
           <div class="profile-avatar-wrap">
-            <img v-if="user.avatar_url" :src="`${nodeHost}/v2/HCki6aX.jpeg`" :alt="user.username" class="profile-avatar" />
+            <img v-if="user.avatar_url" :src="avatarUrl" :alt="user.username" class="profile-avatar" />
             <div v-else class="profile-avatar profile-avatar-default">{{ avatarLetter }}</div>
           </div>
           <div class="profile-meta">
@@ -494,7 +494,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast/use-toast';
@@ -564,6 +564,14 @@ const albumImages = ref<ImageRecord[]>([]);
 const albumLoading = ref(false);
 
 const avatarLetter = computed(() => (user.value?.username || '?')[0].toUpperCase());
+// 头像 URL：统一走 /v2/ 代理，避免 i.imgur.com 国内直连失败
+const avatarUrl = computed(() => {
+  const url = user.value?.avatar_url || '';
+  if (!url) return '';
+  if (url.startsWith(`${nodeHost}/v2/`) || url.startsWith('data:')) return url;
+  const fileId = url.split('/').pop();
+  return fileId ? `${nodeHost}/v2/${fileId}` : url;
+});
 const hasEmailBound = computed(() => user.value?.auth_methods?.some((m) => m.provider === 'email') ?? false);
 
 // ===== 工具函数 =====
@@ -1002,6 +1010,32 @@ const loadMore = async () => {
 };
 
 onMounted(init);
+
+// ===== 上传完成自动刷新 =====
+// 监听全局 upload:saved 事件（useUploadManager.saveImage 成功后触发），
+// 在 Profile 页面时自动刷新图片列表和相册统计，无需手动刷新。
+let uploadSavedTimer: ReturnType<typeof setTimeout> | null = null;
+const onUploadSaved = () => {
+  // 防抖：短时间内多次上传只刷新一次
+  if (uploadSavedTimer) clearTimeout(uploadSavedTimer);
+  uploadSavedTimer = setTimeout(async () => {
+    if (!user.value) return;
+    await Promise.all([fetchImages(0), fetchAlbums()]);
+    // 当前在相册详情视图中，也刷新相册内图片
+    if (activeAlbumId.value !== null) await fetchAlbumImages(activeAlbumId.value);
+  }, 800);
+};
+window.addEventListener('upload:saved', onUploadSaved);
+
+// 监听全局 auth:changed 事件（头像/用户名更新后触发），刷新用户信息以同步头像
+const onAuthChanged = () => { fetchUser(); };
+window.addEventListener('auth:changed', onAuthChanged);
+
+onUnmounted(() => {
+  window.removeEventListener('upload:saved', onUploadSaved);
+  window.removeEventListener('auth:changed', onAuthChanged);
+  if (uploadSavedTimer) clearTimeout(uploadSavedTimer);
+});
 
 // ===== 预览（复用 ViewImage 灯箱） =====
 declare const ViewImage: any;

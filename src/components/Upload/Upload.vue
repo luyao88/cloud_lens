@@ -69,42 +69,14 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { useUploadManager } from '@/composables/useUploadManager';
 const { toast } = useToast();
 // 上传队列由全局管理器维护，切换页面不会中断
-const { items, addFiles, targetAlbum, setTargetAlbum } = useUploadManager();
+const { items, addFiles, targetAlbum, setTargetAlbum, albums, albumTreeOptions, defaultAlbumId, fetchAlbums } = useUploadManager();
 // 参数
 const props = defineProps(['UploadConfig']);
 const UploadConfig = ref<any>(props.UploadConfig);
 
 // ===== 上传目标相册 =====
-interface AlbumRow {
-  id: number;
-  name: string;
-  parent_id: number | null;
-  image_count: number;
-  created_at: string;
-}
-
 const loggedIn = ref(false);
 const albumsLoaded = ref(false);
-const albums = ref<AlbumRow[]>([]);
-const defaultAlbumId = ref<number | null>(null);
-
-const fetchAlbums = async () => {
-  try {
-    const res = await fetch('/api/albums');
-    if (res.status === 401) {
-      loggedIn.value = false;
-      return;
-    }
-    const data = await res.json();
-    if (data.success) {
-      albums.value = data.albums || [];
-      defaultAlbumId.value = data.default_album_id ?? null;
-      albumsLoaded.value = true;
-    }
-  } catch {
-    // 网络异常时保持隐藏，不影响上传主流程
-  }
-};
 
 const fetchState = async () => {
   try {
@@ -114,28 +86,16 @@ const fetchState = async () => {
   } catch {
     loggedIn.value = false;
   }
-  if (loggedIn.value) await fetchAlbums();
-  else albumsLoaded.value = false;
+  if (loggedIn.value) {
+    await fetchAlbums();
+    albumsLoaded.value = true;
+  } else {
+    albumsLoaded.value = false;
+  }
 };
 
-// 相册树平铺为下拉选项（子相册缩进显示）
-const albumOptions = computed(() => {
-  const byParent = new Map<number | null, AlbumRow[]>();
-  for (const a of albums.value) {
-    const p = a.parent_id ?? null;
-    if (!byParent.has(p)) byParent.set(p, []);
-    byParent.get(p)!.push(a);
-  }
-  const out: { id: number; label: string }[] = [];
-  const walk = (parent: number | null, depth: number) => {
-    for (const a of byParent.get(parent) || []) {
-      out.push({ id: a.id, label: `${'　'.repeat(depth)}${depth ? '└ ' : ''}${a.name}` });
-      walk(a.id, depth + 1);
-    }
-  };
-  walk(null, 0);
-  return out;
-});
+// 相册选项直接使用全局管理器的 albumTreeOptions
+const albumOptions = albumTreeOptions;
 
 const selectValue = computed(() =>
   targetAlbum.value === undefined ? 'default' : targetAlbum.value === null ? 'none' : String(targetAlbum.value),

@@ -33,7 +33,7 @@
         </button>
         <!-- 已登录：显示头像 + 下拉菜单 -->
         <div v-else class="user-menu" @click="showMenu = !showMenu" ref="menuRef">
-          <img v-if="user.avatar_url" :src="`${nodeHost}/v2/HCki6aX.jpeg`" :alt="user.username" class="user-avatar" />
+          <img v-if="user.avatar_url" :src="avatarUrl" :alt="user.username" class="user-avatar" />
           <div v-else class="user-avatar user-avatar-default">
             {{ (user.username || '?')[0].toUpperCase() }}
           </div>
@@ -42,7 +42,7 @@
           </Teleport>
           <div v-if="showMenu" class="dropdown-menu" @click.stop>
             <div class="dropdown-header">
-              <img v-if="user.avatar_url" :src="`${nodeHost}/v2/HCki6aX.jpeg`" class="dropdown-avatar" />
+              <img v-if="user.avatar_url" :src="avatarUrl" class="dropdown-avatar" />
               <div v-else class="dropdown-avatar dropdown-avatar-default">
                 {{ (user.username || '?')[0].toUpperCase() }}
               </div>
@@ -82,7 +82,7 @@
       </div>
     </div>
     <!-- 登录弹窗 -->
-    <AuthDialog v-model:open="authOpen" @success="fetchUser" @forgot="openForgot" />
+    <AuthDialog v-model:open="authOpen" @success="onLoginSuccess" @forgot="openForgot" />
     <!-- 找回密码弹窗 -->
     <ForgotPassword v-model:open="forgotOpen" />
     <!-- 上传抽屉弹窗 -->
@@ -109,7 +109,7 @@
   </header>
 </template>
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import ThemeToggle from '@/components/ThemeToggle/ThemeToggle.vue';
 import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 import ForgotPassword from '@/components/ForgotPassword/ForgotPassword.vue';
@@ -119,6 +119,16 @@ const props = defineProps(['title']);
 
 const nodeHost = import.meta.env.VITE_IMG_API_URL || location.origin;
 const user = ref<{ username: string; avatar_url: string; email: string } | null>(null);
+// 头像 URL：user.avatar_url 可能是 i.imgur.com 直连（国内不可达）或已代理地址，统一转走 /v2/ 代理
+const avatarUrl = computed(() => {
+  const url = user.value?.avatar_url || '';
+  if (!url) return '';
+  // 已经是 /v2/ 代理地址或 data: URL，直接使用
+  if (url.startsWith(`${nodeHost}/v2/`) || url.startsWith('data:')) return url;
+  // 形如 https://i.imgur.com/xxx.png -> 提取 fileId 走代理
+  const fileId = url.split('/').pop();
+  return fileId ? `${nodeHost}/v2/${fileId}` : url;
+});
 const showMenu = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
 const authOpen = ref(false);
@@ -143,6 +153,12 @@ const fetchUser = async () => {
     const data = await res.json();
     user.value = data.user || null;
   } catch {}
+};
+
+// 登录成功后：刷新用户信息并通知全局（Upload/Profile/useUploadManager 同步相册）
+const onLoginSuccess = async () => {
+  await fetchUser();
+  window.dispatchEvent(new Event('auth:changed'));
 };
 
 // 退出登录：AJAX 方式，不刷新整页

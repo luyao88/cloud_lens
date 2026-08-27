@@ -121,6 +121,55 @@
           border-radius: 0 0.375rem 0.375rem 0;
         }
       }
+
+      // 单图相册选择器
+      & > .album-picker {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        height: 1.75rem;
+        white-space: nowrap;
+
+        & > .picker-icon {
+          flex-shrink: 0;
+          width: 0.95rem;
+          height: 0.95rem;
+          color: var(--text-muted);
+        }
+
+        & > .picker-select {
+          box-sizing: border-box;
+          padding: 0 0.5rem;
+          height: 1.75rem;
+          max-width: 12rem;
+          font-size: 13px;
+          color: var(--text-primary);
+          background: var(--bg-input);
+          border: 1px solid var(--border-base);
+          border-radius: 0.375rem;
+          cursor: pointer;
+          transition: border-color 0.16s, box-shadow 0.16s;
+
+          &:hover {
+            border-color: var(--border-hover);
+          }
+
+          &:focus {
+            border-color: #03b6aa;
+            box-shadow: 0 0 0 2px rgba(3, 182, 170, 0.1);
+            outline: none;
+          }
+        }
+
+        &.is-hint {
+          opacity: 0.55;
+
+          & > .picker-hint {
+            font-size: 13px;
+            color: var(--text-muted);
+          }
+        }
+      }
     }
 
     // 删除按钮

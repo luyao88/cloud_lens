@@ -27,7 +27,53 @@ export interface UploadItem {
   upload_result: any; // Imgur 响应
   error?: string;
   xhr?: XMLHttpRequest | null;
+  db_image_id?: number | null; // 保存到数据库后的图片记录ID
+  saved_album_id?: number | null; // 实际保存到的相册ID（null=未分组）
 }
+
+// ===== 相册列表（供 ResList 单图选择相册用） =====
+export interface AlbumRow {
+  id: number;
+  name: string;
+  parent_id: number | null;
+  image_count: number;
+  created_at: string;
+}
+const albums = ref<AlbumRow[]>([]);
+const defaultAlbumId = ref<number | null>(null);
+
+const fetchAlbums = async () => {
+  try {
+    const res = await fetch('/api/albums');
+    if (res.status === 401) return;
+    const data = await res.json();
+    if (data.success) {
+      albums.value = data.albums || [];
+      defaultAlbumId.value = data.default_album_id ?? null;
+    }
+  } catch {
+    // 网络异常时保持旧数据
+  }
+};
+
+// 相册树平铺为下拉选项（子相册缩进显示）
+const albumTreeOptions = computed(() => {
+  const byParent = new Map<number | null, AlbumRow[]>();
+  for (const a of albums.value) {
+    const p = a.parent_id ?? null;
+    if (!byParent.has(p)) byParent.set(p, []);
+    byParent.get(p)!.push(a);
+  }
+  const out: { id: number; label: string }[] = [];
+  const walk = (parent: number | null, depth: number) => {
+    for (const a of byParent.get(parent) || []) {
+      out.push({ id: a.id, label: `${'　'.repeat(depth)}${depth ? '└ ' : ''}${a.name}` });
+      walk(a.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+});
 
 const items = reactive<UploadItem[]>([]);
 let idCounter = 0;
@@ -63,6 +109,7 @@ const checkAuth = async (): Promise<boolean> => {
 if (typeof window !== 'undefined') {
   window.addEventListener('auth:changed', () => {
     authKnown = false;
+    fetchAlbums();
   });
 }
 
@@ -103,20 +150,56 @@ if (typeof window !== 'undefined') {
 // 上传成功后保存到服务器（需要登录，未登录静默跳过，不影响上传结果）
 const saveImage = async (item: UploadItem) => {
   if (!(await checkAuth())) return;
-  fetch('/api/images', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      imgur_id: item.upload_result?.data?.id,
-      imgur_url: item.upload_result?.data?.link,
-      delete_hash: item.upload_result?.data?.deletehash,
-      filename: item.name,
-      size: item.size,
-      tags: '',
-      // undefined 时 JSON.stringify 会省略该字段 → 后端归入默认相册
-      ...(targetAlbum.value !== undefined ? { album_id: targetAlbum.value } : {}),
-    }),
-  }).catch(() => {});
+  try {
+    const res = await fetch('/api/images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imgur_id: item.upload_result?.data?.id,
+        imgur_url: item.upload_result?.data?.link,
+        delete_hash: item.upload_result?.data?.deletehash,
+        filename: item.name,
+        size: item.size,
+        tags: '',
+        ...(targetAlbum.value !== undefined ? { album_id: targetAlbum.value } : {}),
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      item.db_image_id = data.image?.id ?? null;
+      item.saved_album_id = data.image?.album_id ?? null;
+      window.dispatchEvent(new CustomEvent('upload:saved', { detail: { image: data.image } }));
+    } else if (data.error) {
+      toast({ title: '记录保存失败', description: data.error, variant: 'destructive' });
+    }
+  } catch {
+    toast({ title: '记录保存失败', description: '网络错误，图片已上传但记录未保存', variant: 'destructive' });
+  }
+};
+
+// 单张图片更改相册（在 ResList 中操作）
+const changeItemAlbum = async (item: UploadItem, albumId: number | null) => {
+  if (!item.db_image_id) {
+    toast({ title: 'Tips', description: '图片记录尚未保存，无法更改相册' });
+    return;
+  }
+  try {
+    const res = await fetch(`/api/images/${item.db_image_id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ album_id: albumId }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      item.saved_album_id = albumId;
+      window.dispatchEvent(new CustomEvent('upload:saved', { detail: { image: data.image } }));
+      toast({ title: 'Tips', description: '相册已更新' });
+    } else {
+      toast({ title: '操作失败', description: data.error, variant: 'destructive' });
+    }
+  } catch {
+    toast({ title: '操作失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+  }
 };
 
 // ===== 单个文件上传（XHR 获得真实上传进度） =====
@@ -214,6 +297,8 @@ const addFiles = (files: File[]) => {
       upload_type: file.type.startsWith('video/') ? 'video' : 'image',
       upload_result: null,
       xhr: null,
+      db_image_id: undefined,
+      saved_album_id: undefined,
     });
     items.unshift(item);
     enqueueUpload(item);
@@ -284,6 +369,11 @@ export const useUploadManager = () => ({
   overallProgress,
   targetAlbum,
   setTargetAlbum,
+  albums,
+  albumTreeOptions,
+  defaultAlbumId,
+  fetchAlbums,
+  changeItemAlbum,
 });
 
 // ===== 刷新前警告：上传中拦截 beforeunload，避免上传被打断 =====
