@@ -23,7 +23,7 @@
       </div>
       <p>
         <span class="upload-title">{{ isDragover ? '释放即可上传' : '点击或拖拽上传文件' }}</span>
-        <span class="upload-hint">{{ isDragover ? `检测到 ${dragoverCount} 个文件` : `支持图片和视频 · 最大 ${UploadConfig.MaxSize}MB · 可粘贴上传` }}</span>
+        <span class="upload-hint">{{ isDragover ? `检测到 ${dragoverCount} 个文件` : `支持图片和视频 · 最大 ${UploadConfig.MaxSize}MB · 最多 ${UploadConfig.Max} 张 · 可粘贴上传` }}</span>
       </p>
     </div>
   </section>

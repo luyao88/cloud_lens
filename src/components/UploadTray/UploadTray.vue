@@ -40,8 +40,8 @@
           <div class="tray-list">
             <div v-for="item in items" :key="item.id" class="tray-item" :class="['is-' + item.upload_status, { 'is-queued': item.upload_status === 'uploading' && !item.xhr }]">
               <div class="tray-thumb">
-                <img v-if="item.upload_type === 'image' && item.upload_blob" :src="item.upload_blob" :alt="item.name" />
-                <video v-else-if="item.upload_type === 'video' && item.upload_blob" :src="item.upload_blob" muted></video>
+                <img v-if="item.upload_type === 'image' && item.upload_blob" :src="item.upload_blob" :alt="item.name" loading="lazy" decoding="async" />
+                <video v-else-if="item.upload_type === 'video' && item.upload_blob" :src="item.upload_blob" muted preload="none"></video>
                 <span v-else class="thumb-fallback">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />

@@ -111,7 +111,7 @@ const { items, setItems, nodeHost } = useUploadManager();
 // 上传配置
 const UploadConfig = ref<any>({
   AcceptTypes: 'image/jpeg,image/png,image/gif,image/apng,image/tiff,image/bmp,image/webp,video/mp4,video/webm', // Imgur匿名上传实际支持的格式（MOV/AVI/MKV会被Imgur拒绝）
-  Max: 0, //多选个数，0为不限制
+  Max: 100, //单次/累计最多 100 张，超过会被自动过滤
   MaxSize: 100, //单个文件大小限制，单位：MB（Cloudflare 免费版请求体上限 100MB，超过会被 413 拒绝）
 });
 </script>

@@ -135,7 +135,7 @@ const openForgot = () => {
 // 上传配置（与首页一致）
 const UploadConfig = ref<any>({
   AcceptTypes: 'image/jpeg,image/png,image/gif,image/apng,image/tiff,image/bmp,image/webp,video/mp4,video/webm',
-  Max: 0,
+  Max: 100,
   MaxSize: 100,
 });
 
