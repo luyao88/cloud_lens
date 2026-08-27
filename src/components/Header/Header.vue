@@ -114,21 +114,14 @@ import ThemeToggle from '@/components/ThemeToggle/ThemeToggle.vue';
 import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 import ForgotPassword from '@/components/ForgotPassword/ForgotPassword.vue';
 import Upload from '@/components/Upload/Upload.vue';
+import { resolveAvatarSrc } from '@/utils';
 
 const props = defineProps(['title']);
 
 const nodeHost = import.meta.env.VITE_IMG_API_URL || location.origin;
 const user = ref<{ username: string; avatar_url: string; email: string } | null>(null);
-// 头像 URL：user.avatar_url 可能是 i.imgur.com 直连（国内不可达）或已代理地址，统一转走 /v2/ 代理
-const avatarUrl = computed(() => {
-  const url = user.value?.avatar_url || '';
-  if (!url) return '';
-  // 已经是 /v2/ 代理地址或 data: URL，直接使用
-  if (url.startsWith(`${nodeHost}/v2/`) || url.startsWith('data:')) return url;
-  // 形如 https://i.imgur.com/xxx.png -> 提取 fileId 走代理
-  const fileId = url.split('/').pop();
-  return fileId ? `${nodeHost}/v2/${fileId}` : url;
-});
+// 头像 URL：仅 Imgur 源转 /v2/ 代理，第三方头像（GitHub 等）直接使用原始链接
+const avatarUrl = computed(() => resolveAvatarSrc(user.value?.avatar_url, nodeHost));
 const showMenu = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
 const authOpen = ref(false);

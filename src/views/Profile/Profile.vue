@@ -504,6 +504,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast/use-toast';
+import { resolveAvatarSrc } from '@/utils';
 
 const { toast } = useToast();
 
@@ -574,14 +575,8 @@ let albumFetchSeq = 0;
 let imagesFetchSeq = 0;
 
 const avatarLetter = computed(() => (user.value?.username || '?')[0].toUpperCase());
-// 头像 URL：统一走 /v2/ 代理，避免 i.imgur.com 国内直连失败
-const avatarUrl = computed(() => {
-  const url = user.value?.avatar_url || '';
-  if (!url) return '';
-  if (url.startsWith(`${nodeHost}/v2/`) || url.startsWith('data:')) return url;
-  const fileId = url.split('/').pop();
-  return fileId ? `${nodeHost}/v2/${fileId}` : url;
-});
+// 头像 URL：仅 Imgur 源转 /v2/ 代理，第三方头像（GitHub 等）直接使用原始链接
+const avatarUrl = computed(() => resolveAvatarSrc(user.value?.avatar_url, nodeHost));
 const hasEmailBound = computed(() => user.value?.auth_methods?.some((m) => m.provider === 'email') ?? false);
 
 // ===== 工具函数 =====

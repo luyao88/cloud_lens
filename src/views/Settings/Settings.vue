@@ -338,6 +338,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast/use-toast';
+import { resolveAvatarSrc } from '@/utils';
 
 const { toast } = useToast();
 const nodeHost = import.meta.env.VITE_IMG_API_URL || location.origin;
@@ -350,14 +351,8 @@ const user = ref<{ id?: number; username: string; avatar_url: string | null; ema
 const avatarLetter = computed(() => (user.value?.username || '?')[0].toUpperCase());
 const hasEmailBound = computed(() => user.value?.auth_methods?.some((m) => m.provider === 'email') ?? false);
 
-// 头像代理：i.imgur.com 直连国内无法访问，统一走 /v2/ 代理
-const avatarUrl = computed(() => {
-  const url = user.value?.avatar_url || '';
-  if (!url) return '';
-  if (url.startsWith(`${nodeHost}/v2/`) || url.startsWith('data:')) return url;
-  const fileId = url.split('/').pop();
-  return fileId ? `${nodeHost}/v2/${fileId}` : url;
-});
+// 头像 URL：仅 Imgur 源转 /v2/ 代理，第三方头像（GitHub 等）直接使用原始链接
+const avatarUrl = computed(() => resolveAvatarSrc(user.value?.avatar_url, nodeHost));
 
 const fetchUser = async () => {
   try {
