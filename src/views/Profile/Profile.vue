@@ -934,6 +934,7 @@ const confirmBatchDelete = async () => {
     }
   } catch {
     toast({ title: '删除失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+    batchDeleteOpen.value = false;
   } finally {
     batchDeleting.value = false;
   }
@@ -1257,6 +1258,7 @@ const confirmDelete = async () => {
     const data = await res.json();
     if (!data.success) {
       toast({ title: '删除失败', description: data.error, variant: 'destructive' });
+      deleteOpen.value = false;
       return;
     }
     const { id, size } = deleteTarget.value;
@@ -1276,6 +1278,7 @@ const confirmDelete = async () => {
     toast({ title: 'Tips', description: '已删除' });
   } catch {
     toast({ title: '删除失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+    deleteOpen.value = false;
   } finally {
     deleting.value = false;
   }
