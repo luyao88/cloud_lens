@@ -28,9 +28,7 @@
             <div v-else class="profile-avatar profile-avatar-default">{{ avatarLetter }}</div>
           </div>
           <div class="profile-meta">
-            <div class="profile-name-row">
-              <h1 class="profile-name">{{ user.username }}</h1>
-            </div>
+            <h1 class="profile-name">{{ user.username }}</h1>
             <div class="profile-email-row">
               <p class="profile-email">{{ user.email || '未绑定邮箱' }}</p>
               <span v-if="hasEmailBound" class="verified-badge">
@@ -42,22 +40,20 @@
               <span v-for="m in user.auth_methods" :key="m.provider" class="auth-method-tag">{{ { email: '邮箱', github: 'GitHub', google: 'Google', gitee: 'Gitee' }[m.provider] || m.provider }}</span>
             </div>
           </div>
-          <div class="profile-stats">
-            <div class="stat">
-              <span class="stat-num">{{ stats.total }}</span>
-              <span class="stat-label">图片</span>
-            </div>
-            <div class="stat-divider"></div>
-            <div class="stat">
-              <span class="stat-num">{{ realAlbums.length }}</span>
-              <span class="stat-label">相册</span>
-            </div>
-            <div class="stat-divider"></div>
-            <div class="stat">
-              <span class="stat-num">{{ formatSize(stats.totalSize) }}</span>
-              <span class="stat-label">占用空间</span>
-            </div>
-          </div>
+        </div>
+        <div class="profile-stats-bar">
+          <span class="stat-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
+            <b>{{ stats.total }}</b><i>图片</i>
+          </span>
+          <span class="stat-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" /></svg>
+            <b>{{ realAlbums.length }}</b><i>相册</i>
+          </span>
+          <span class="stat-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5v14a9 3 0 0 0 18 0V5" /><path d="M3 12a9 3 0 0 0 18 0" /></svg>
+            <b>{{ formatSize(stats.totalSize) }}</b><i>占用</i>
+          </span>
         </div>
       </div>
 
