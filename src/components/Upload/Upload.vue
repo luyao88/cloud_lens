@@ -1,12 +1,5 @@
 <template>
-  <section
-    class="Upload"
-    :class="{ 'is-dragover': isDragover }"
-    @dragover.prevent="onDragover"
-    @dragenter.prevent="onDragenter"
-    @dragleave.prevent="onDragleave"
-    @drop.prevent="onDrop"
-  >
+  <section class="Upload" :class="{ 'is-dragover': isDragover }" @dragover.prevent="onDragover" @dragenter.prevent="onDragenter" @dragleave.prevent="onDragleave" @drop.prevent="onDrop">
     <input type="file" multiple @change="fileListChange" :accept="UploadConfig.AcceptTypes" />
     <div class="placeholder">
       <div class="upload-icon-wrap">
@@ -86,9 +79,7 @@ const UploadConfig = ref<any>(props.UploadConfig);
 // 相册选项直接使用全局管理器的 albumTreeOptions
 const albumOptions = albumTreeOptions;
 
-const selectValue = computed(() =>
-  targetAlbum.value === undefined ? 'default' : targetAlbum.value === null ? 'none' : String(targetAlbum.value),
-);
+const selectValue = computed(() => (targetAlbum.value === undefined ? 'default' : targetAlbum.value === null ? 'none' : String(targetAlbum.value)));
 
 const defaultAlbumLabel = computed(() => {
   if (defaultAlbumId.value === null) return '未分组';
@@ -256,13 +247,16 @@ const fileListChange = async (v: Event | File[], type: boolean = false) => {
     toast({ title: '文件被拒绝', description: rejectedFiles.join('、') });
   }
   if (!validFiles.length) return;
-  // 过滤超过数量的文件
-  let finalFiles = validFiles;
-  if (UploadConfig.value.Max && items.length + validFiles.length > UploadConfig.value.Max) {
-    finalFiles = validFiles.slice(0, Math.max(0, UploadConfig.value.Max - items.length));
-    toast({ title: 'Tips', description: `已过滤超过最大上传 ${UploadConfig.value.Max}个 的文件` });
+  // 超过数量上限直接提示并停止上传，不处理任何文件
+  if (UploadConfig.value.Max && validFiles.length > UploadConfig.value.Max) {
+    toast({
+      title: '上传数量限制',
+      description: `单次选择文件上限${UploadConfig.value.Max}张，请减少选择数量`,
+      variant: 'destructive',
+    });
+    return;
   }
-  if (finalFiles.length) addFiles(finalFiles);
+  addFiles(validFiles);
 };
 
 // 图片格式webp 转换为png

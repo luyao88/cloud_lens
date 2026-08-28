@@ -340,6 +340,16 @@ const releaseItem = (item: UploadItem) => {
 
 // ===== 对外接口 =====
 const addFiles = (files: File[]) => {
+  // 检查单次选择文件数量限制（100张）
+  if (files.length > 100) {
+    toast({
+      title: '上传数量限制',
+      description: '单次选择文件上限100张',
+      variant: 'destructive',
+    });
+    return; // 停止上传，不处理任何文件
+  }
+
   files.forEach((file) => {
     // 用 reactive 包裹，确保 XHR 回调中修改属性能触发视图更新
     // 否则 item 是原始对象引用，不经过代理的 set 拦截器，Vue 无法感知变化

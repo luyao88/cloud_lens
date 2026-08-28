@@ -38,10 +38,10 @@
           </div>
 
           <div class="tray-list">
-            <div v-for="item in items" :key="item.id" class="tray-item" :class="['is-' + item.upload_status, { 'is-queued': item.upload_status === 'uploading' && !item.xhr }]">
+            <div v-for="item in visibleItems" :key="item.id" class="tray-item" :class="['is-' + item.upload_status, { 'is-queued': item.upload_status === 'uploading' && !item.xhr }]">
               <div class="tray-thumb">
-                <img v-if="item.upload_type === 'image' && item.upload_blob" :src="item.upload_blob" :alt="item.name" loading="lazy" decoding="async" />
-                <video v-else-if="item.upload_type === 'video' && item.upload_blob" :src="item.upload_blob" muted preload="none"></video>
+                <img v-if="item.upload_type === 'image' && item.upload_blob" :src="item.upload_blob" :alt="item.name" />
+                <video v-else-if="item.upload_type === 'video' && item.upload_blob" :src="item.upload_blob" muted></video>
                 <span v-else class="thumb-fallback">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
@@ -100,6 +100,19 @@
                 </button>
               </div>
             </div>
+            <!-- 折叠的更早项提示：点击展开全部，避免长列表一次性渲染 100 项 -->
+            <button v-if="hiddenCount > 0" class="tray-collapsed-tip" @click="showAll = true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+              展开更早的 {{ hiddenCount }} 项
+            </button>
+            <button v-else-if="showAll && items.length > COLLAPSED_LIMIT" class="tray-collapsed-tip" @click="showAll = false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m18 15-6-6-6 6" />
+              </svg>
+              收起
+            </button>
           </div>
         </div>
       </Transition>
@@ -139,6 +152,20 @@ const { items, nodeHost, retry, removeItem, clearFinished, uploadingCount, queue
 
 const expanded = ref(false);
 const dismissed = ref(false);
+
+// ===== 长列表折叠：默认只渲染最近 N 项，老项折叠提示，避免 100 项一次性渲染卡顿 =====
+const COLLAPSED_LIMIT = 50;
+const showAll = ref(false);
+// items 最新项在前（unshift），slice(0, N) 即取最近 N 项
+const visibleItems = computed(() => (showAll.value || items.length <= COLLAPSED_LIMIT ? items : items.slice(0, COLLAPSED_LIMIT)));
+const hiddenCount = computed(() => (showAll.value ? 0 : Math.max(0, items.length - COLLAPSED_LIMIT)));
+// 全部完成（无活跃上传）后自动收起折叠态，让下一批上传又走"先展示 50 项"路径
+watch(
+  () => hasActive.value,
+  (active) => {
+    if (!active) showAll.value = false;
+  },
+);
 
 const toggleExpanded = () => {
   expanded.value = !expanded.value;

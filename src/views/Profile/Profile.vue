@@ -112,7 +112,7 @@
         <div v-if="childAlbums.length" class="child-albums">
           <button v-for="ca in childAlbums" :key="ca.id" class="child-album-card" @click="openRealAlbum(ca.id)">
             <div class="child-album-cover">
-              <img v-if="ca.cover_url" :src="coverUrl(ca.cover_url)" loading="lazy" :alt="ca.name" />
+              <img v-if="ca.cover_url" :src="coverUrl(ca.cover_url)" loading="lazy" decoding="async" :alt="ca.name" />
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect width="18" height="18" x="3" y="3" rx="2" />
                 <circle cx="9" cy="9" r="2" />
@@ -132,7 +132,7 @@
           <div class="image-card" :class="{ selected: selectedIds.has(img.id) }" v-for="img in albumImages" :key="img.id">
             <div class="thumb-wrap" @click="batchMode ? toggleSelect(img) : openPreview(img, albumImages)">
               <video v-if="isVideo(img)" class="thumb" :src="fileUrl(img)" muted preload="metadata" playsinline @loadeddata="onThumbLoad"></video>
-              <img v-else class="thumb" :src="fileUrl(img)" loading="lazy" :alt="img.filename || ''" @load="onThumbLoad" />
+              <img v-else class="thumb" :src="fileUrl(img)" loading="lazy" decoding="async" :alt="img.filename || ''" @load="onThumbLoad" />
               <span v-if="isVideo(img)" class="video-badge">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                 视频
@@ -234,7 +234,7 @@
           <div class="image-card" :class="{ selected: selectedIds.has(img.id) }" v-for="img in activeAlbum.images" :key="img.id">
             <div class="thumb-wrap" @click="batchMode ? toggleSelect(img) : openPreview(img)">
               <video v-if="isVideo(img)" class="thumb" :src="fileUrl(img)" muted preload="metadata" playsinline @loadeddata="onThumbLoad"></video>
-              <img v-else class="thumb" :src="fileUrl(img)" loading="lazy" :alt="img.filename || ''" @load="onThumbLoad" />
+              <img v-else class="thumb" :src="fileUrl(img)" loading="lazy" decoding="async" :alt="img.filename || ''" @load="onThumbLoad" />
               <span v-if="isVideo(img)" class="video-badge">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                 视频
@@ -317,7 +317,7 @@
             </button>
             <button v-for="a in topLevelAlbums" :key="a.id" class="real-album-card" @click="openRealAlbum(a.id)">
               <div class="real-album-cover">
-                <img v-if="a.cover_url" class="cover-img" :src="coverUrl(a.cover_url)" loading="lazy" :alt="a.name" @load="onThumbLoad" />
+                <img v-if="a.cover_url" class="cover-img" :src="coverUrl(a.cover_url)" loading="lazy" decoding="async" :alt="a.name" @load="onThumbLoad" />
                 <div v-else class="is-empty">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="18" height="18" x="3" y="3" rx="2" />
@@ -360,7 +360,7 @@
               <div class="cover-stack" :class="`cover-count-${Math.min(album.images.length, 3)}`">
                 <div class="cover-item" v-for="img in album.images.slice(0, 3)" :key="img.id">
                   <video v-if="isVideo(img)" class="cover-media" :src="fileUrl(img)" muted preload="metadata" playsinline></video>
-                  <img v-else class="cover-media" :src="fileUrl(img)" loading="lazy" :alt="album.name" />
+                  <img v-else class="cover-media" :src="fileUrl(img)" loading="lazy" decoding="async" :alt="album.name" />
                 </div>
                 <span class="cover-badge">{{ album.images.length }}</span>
               </div>
