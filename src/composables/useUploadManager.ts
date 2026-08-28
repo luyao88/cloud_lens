@@ -263,8 +263,17 @@ const uploadItem = (item: UploadItem) => {
   const xhr = new XMLHttpRequest();
   item.xhr = xhr;
   xhr.open('POST', uploadAPI);
+  // 节流：onprogress 高频触发，至少间隔 150ms 才更新 UI，避免 50 项列表渲染卡顿
+  let lastProgressTs = 0;
   xhr.upload.onprogress = (e) => {
-    if (e.lengthComputable) item.upload_progress = Math.min(99, Math.round((e.loaded / e.total) * 100));
+    if (!e.lengthComputable) return;
+    const pct = Math.min(99, Math.round((e.loaded / e.total) * 100));
+    const now = Date.now();
+    if (pct !== item.upload_progress && (now - lastProgressTs > 150 || pct >= 99)) {
+      item.upload_progress = pct;
+      lastProgressTs = now;
+      refreshOverallProgress();
+    }
   };
   xhr.onload = () => {
     item.xhr = null;
@@ -350,6 +359,9 @@ const addFiles = (files: File[]) => {
     return; // 停止上传，不处理任何文件
   }
 
+  // 先创建所有条目并 unshift 到列表（最新项在前），再倒序入队上传
+  // 这样列表顶部的项先上传，视觉上从上往下
+  const newItems: UploadItem[] = [];
   files.forEach((file) => {
     // 用 reactive 包裹，确保 XHR 回调中修改属性能触发视图更新
     // 否则 item 是原始对象引用，不经过代理的 set 拦截器，Vue 无法感知变化
@@ -368,8 +380,10 @@ const addFiles = (files: File[]) => {
       saved_album_id: undefined,
     });
     items.unshift(item);
-    enqueueUpload(item);
+    newItems.push(item);
   });
+  // 倒序入队：列表顶部的项（最后 unshift 的）先上传
+  newItems.reverse().forEach((item) => enqueueUpload(item));
 };
 
 const retry = (id: string) => {
@@ -410,14 +424,22 @@ const errorCount = computed(() => items.filter((i) => i.upload_status === 'error
 const successCount = computed(() => items.filter((i) => i.upload_status === 'success').length);
 const hasActive = computed(() => uploadingCount.value > 0);
 const hasSuccessUpload = computed(() => successCount.value > 0);
-// 总体进度按字节加权，比平均百分比更真实
-const overallProgress = computed(() => {
+// 总体进度：用 ref + 手动节流更新替代 computed，避免每次 progress 变化都遍历全量 items
+const overallProgress = ref(0);
+let overallProgressTs = 0;
+const refreshOverallProgress = () => {
+  const now = Date.now();
+  if (now - overallProgressTs < 200) return; // 节流 200ms
+  overallProgressTs = now;
   const active = items.filter((i) => i.upload_status !== 'success');
-  if (!active.length) return 100;
+  if (!active.length) {
+    overallProgress.value = 100;
+    return;
+  }
   const total = active.reduce((s, i) => s + (i.size || 1), 0);
   const done = active.reduce((s, i) => s + ((i.size || 1) * i.upload_progress) / 100, 0);
-  return Math.round((done / total) * 100);
-});
+  overallProgress.value = Math.round((done / total) * 100);
+};
 
 export const useUploadManager = () => ({
   items,

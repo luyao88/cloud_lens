@@ -131,8 +131,8 @@
         <div v-else-if="albumImages.length" class="image-grid" :class="{ 'batch-mode': batchMode }">
           <div class="image-card" :class="{ selected: selectedIds.has(img.id) }" v-for="img in albumImages" :key="img.id">
             <div class="thumb-wrap" @click="batchMode ? toggleSelect(img) : openPreview(img, albumImages)">
-              <video v-if="isVideo(img)" class="thumb" :src="fileUrl(img)" muted preload="metadata" playsinline @loadeddata="onThumbLoad"></video>
-              <img v-else class="thumb" :src="fileUrl(img)" loading="lazy" decoding="async" :alt="img.filename || ''" @load="onThumbLoad" />
+              <video v-if="isVideo(img)" class="thumb" v-lazy-video="fileUrl(img)" muted playsinline @loadeddata="onThumbLoad"></video>
+              <img v-else class="thumb" :src="thumbUrl(img, 'm')" :data-orig="fileUrl(img)" loading="lazy" decoding="async" :alt="img.filename || ''" @load="onThumbLoad" @error="onThumbError" />
               <span v-if="isVideo(img)" class="video-badge">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                 视频
@@ -185,6 +185,11 @@
               </p>
             </div>
           </div>
+          <div v-if="hasMoreAlbum" class="load-more grid-span-full">
+            <button class="load-more-btn" :disabled="albumLoadingMore" @click="loadMoreAlbum">
+              {{ albumLoadingMore ? '加载中...' : '加载更多' }}
+            </button>
+          </div>
         </div>
         <div v-else class="state-tip">{{ currentAlbum ? '该相册暂无图片，' : '暂无未分组图片，' }}<router-link to="/" class="link">去上传</router-link></div>
       </div>
@@ -233,8 +238,8 @@
         <div v-if="activeAlbum.images.length" class="image-grid" :class="{ 'batch-mode': batchMode }">
           <div class="image-card" :class="{ selected: selectedIds.has(img.id) }" v-for="img in activeAlbum.images" :key="img.id">
             <div class="thumb-wrap" @click="batchMode ? toggleSelect(img) : openPreview(img)">
-              <video v-if="isVideo(img)" class="thumb" :src="fileUrl(img)" muted preload="metadata" playsinline @loadeddata="onThumbLoad"></video>
-              <img v-else class="thumb" :src="fileUrl(img)" loading="lazy" decoding="async" :alt="img.filename || ''" @load="onThumbLoad" />
+              <video v-if="isVideo(img)" class="thumb" v-lazy-video="fileUrl(img)" muted playsinline @loadeddata="onThumbLoad"></video>
+              <img v-else class="thumb" :src="thumbUrl(img, 'm')" :data-orig="fileUrl(img)" loading="lazy" decoding="async" :alt="img.filename || ''" @load="onThumbLoad" @error="onThumbError" />
               <span v-if="isVideo(img)" class="video-badge">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                 视频
@@ -317,7 +322,7 @@
             </button>
             <button v-for="a in topLevelAlbums" :key="a.id" class="real-album-card" @click="openRealAlbum(a.id)">
               <div class="real-album-cover">
-                <img v-if="a.cover_url" class="cover-img" :src="coverUrl(a.cover_url)" loading="lazy" decoding="async" :alt="a.name" @load="onThumbLoad" />
+                <img v-if="a.cover_url" class="cover-img" :src="coverThumbUrl(a.cover_url, 't')" :data-orig="coverUrl(a.cover_url)" loading="lazy" decoding="async" :alt="a.name" @load="onThumbLoad" @error="onThumbError" />
                 <div v-else class="is-empty">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="18" height="18" x="3" y="3" rx="2" />
@@ -359,8 +364,8 @@
             <div class="album-card" v-for="album in albums" :key="album.key" @click="activeKey = album.key">
               <div class="cover-stack" :class="`cover-count-${Math.min(album.images.length, 3)}`">
                 <div class="cover-item" v-for="img in album.images.slice(0, 3)" :key="img.id">
-                  <video v-if="isVideo(img)" class="cover-media" :src="fileUrl(img)" muted preload="metadata" playsinline></video>
-                  <img v-else class="cover-media" :src="fileUrl(img)" loading="lazy" decoding="async" :alt="album.name" />
+                  <video v-if="isVideo(img)" class="cover-media" v-lazy-video="fileUrl(img)" muted playsinline></video>
+                  <img v-else class="cover-media" :src="thumbUrl(img, 't')" :data-orig="fileUrl(img)" loading="lazy" decoding="async" :alt="album.name" @error="onThumbError" />
                 </div>
                 <span class="cover-badge">{{ album.images.length }}</span>
               </div>
@@ -505,6 +510,32 @@ import { ALBUMS_CHANGED_EVENT } from '@/composables/useUploadManager';
 
 const { toast } = useToast();
 
+// 视频懒加载指令：进入视口前不加载 metadata，避免相册内多个视频抢占图片带宽
+const vLazyVideo = {
+  mounted(el: HTMLVideoElement, binding: { value: string }) {
+    const src = binding.value;
+    if (!src) return;
+    el.preload = 'none';
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            el.src = src;
+            el.preload = 'metadata';
+            io.unobserve(el);
+          }
+        }
+      },
+      { rootMargin: '300px' }
+    );
+    io.observe(el);
+    (el as any)._lazyIO = io;
+  },
+  unmounted(el: HTMLVideoElement) {
+    (el as any)._lazyIO?.disconnect();
+  }
+};
+
 /** 登录成功后刷新本页并通知 Header 同步 */
 async function onLoginSuccess() {
   await init();
@@ -541,10 +572,17 @@ interface RealAlbum {
   created_at: string;
 }
 
-const PAGE_SIZE = 100;
 const UNTAGGED_KEY = '__untagged__';
 // IPFS节点（与 Home 保持一致）
 const nodeHost = import.meta.env.VITE_IMG_API_URL || location.origin;
+// 响应式分页大小：首屏按视口宽度决定，避免一次性渲染过多卡片导致卡顿
+const computePageSize = () => {
+  if (typeof window === 'undefined') return 36;
+  const w = window.innerWidth;
+  if (w < 640) return 12; // 手机：约 2 列 x 6 行
+  if (w < 1024) return 24; // 平板：约 4 列 x 6 行
+  return 36; // 桌面：约 6 列 x 6 行
+};
 // 视频扩展名判定（与 functions/v2/[vkey].js 一致）
 const VIDEO_RE = /\.(mp4|webm|avi|mov|mkv|flv|wmv|mpeg|mpg)$/i;
 
@@ -566,6 +604,8 @@ const defaultAlbumId = ref<number | null>(null);
 const activeAlbumId = ref<number | null>(null);
 const albumImages = ref<ImageRecord[]>([]);
 const albumLoading = ref(false);
+const albumLoadingMore = ref(false);
+const albumTotal = ref(0);
 // 相册图片请求序号：丢弃切换相册后晚到的过期响应
 let albumFetchSeq = 0;
 // 主列表请求序号：自动刷新(offset=0)与 loadMore 并发时只保留最新响应
@@ -581,6 +621,29 @@ const fileKey = (img: ImageRecord) => img.imgur_url.split('/').pop() || '';
 const fileUrl = (img: ImageRecord) => `${nodeHost}/v2/${fileKey(img)}`;
 // 相册封面 URL（cover_url 是 imgur 链接，同样走 /v2 代理）
 const coverUrl = (url: string) => `${nodeHost}/v2/${url.split('/').pop() || ''}`;
+// 相册封面缩略图 URL：对 cover_url 字符串生成尺寸变体
+const coverThumbUrl = (url: string, size: 't' | 'm' = 't') => {
+  const key = url.split('/').pop() || '';
+  const m = key.match(/^([\s\S]+?)(\.[a-z0-9]+)$/i);
+  if (!m) return coverUrl(url);
+  return `${nodeHost}/v2/${m[1]}${size}${m[2]}`;
+};
+// Imgur 缩略图尺寸变体：在文件扩展名前插入字母后缀
+//   t=160px方形 m=320px方形 l=640px h=1024px
+// 视频无尺寸变体直接返回原图；解析失败也回退原图
+const thumbUrl = (img: ImageRecord, size: 't' | 'm' | 'l' = 'm') => {
+  const key = fileKey(img);
+  if (VIDEO_RE.test(key)) return fileUrl(img);
+  const m = key.match(/^([\s\S]+?)(\.[a-z0-9]+)$/i);
+  if (!m) return fileUrl(img);
+  return `${nodeHost}/v2/${m[1]}${size}${m[2]}`;
+};
+// 缩略图加载失败时回退到原图，避免个别图片无尺寸变体导致空白
+const onThumbError = (e: Event) => {
+  const el = e.target as HTMLImageElement;
+  const raw = el.dataset.orig;
+  if (raw && el.src !== raw) el.src = raw;
+};
 const isVideo = (img: ImageRecord) => VIDEO_RE.test(fileKey(img));
 const formatDate = (img: ImageRecord) => (img.created_at || '').slice(0, 10);
 const tagList = (img: ImageRecord) =>
@@ -633,6 +696,7 @@ const albums = computed<Album[]>(() => {
 
 const activeAlbum = computed(() => (activeKey.value ? albums.value.find((a) => a.key === activeKey.value) || null : null));
 const hasMore = computed(() => images.value.length < stats.value.total);
+const hasMoreAlbum = computed(() => albumImages.value.length < albumTotal.value);
 
 // ===== 实体相册派生状态 =====
 const topLevelAlbums = computed(() => realAlbums.value.filter((a) => !a.parent_id));
@@ -657,7 +721,8 @@ const fetchUser = async () => {
 
 const fetchImages = async (offset = 0) => {
   const seq = ++imagesFetchSeq;
-  const res = await fetch(`/api/images?limit=${PAGE_SIZE}&offset=${offset}`);
+  const limit = computePageSize();
+  const res = await fetch(`/api/images?limit=${limit}&offset=${offset}`);
   if (res.status === 401) {
     user.value = null;
     return;
@@ -694,11 +759,12 @@ const fetchAlbums = async () => {
   }
 };
 
-const fetchAlbumImages = async (albumId: number) => {
+const fetchAlbumImages = async (albumId: number, offset = 0) => {
   const seq = ++albumFetchSeq;
-  albumLoading.value = true;
+  if (offset === 0) albumLoading.value = true;
   try {
-    const res = await fetch(`/api/images?limit=500&album_id=${albumId}`);
+    const limit = computePageSize();
+    const res = await fetch(`/api/images?limit=${limit}&offset=${offset}&album_id=${albumId}`);
     if (res.status === 401) {
       user.value = null;
       return;
@@ -706,10 +772,19 @@ const fetchAlbumImages = async (albumId: number) => {
     const data = await res.json();
     // 快速切换相册时丢弃过期响应，避免慢请求覆盖当前相册
     if (seq !== albumFetchSeq || activeAlbumId.value !== albumId) return;
-    if (data.success) albumImages.value = data.images || [];
+    if (data.success) {
+      if (offset === 0) {
+        albumImages.value = data.images || [];
+      } else {
+        // 追加按 id 去重，避免两次请求间新上传导致重复
+        const existed = new Set(albumImages.value.map((i) => i.id));
+        albumImages.value = [...albumImages.value, ...(data.images || []).filter((i: ImageRecord) => !existed.has(i.id))];
+      }
+      albumTotal.value = data.stats?.total ?? albumImages.value.length;
+    }
   } catch {
     if (seq === albumFetchSeq && activeAlbumId.value === albumId) {
-      albumImages.value = [];
+      if (offset === 0) albumImages.value = [];
       toast({ title: '加载失败', description: '网络错误，请稍后重试', variant: 'destructive' });
     }
   } finally {
@@ -717,10 +792,21 @@ const fetchAlbumImages = async (albumId: number) => {
   }
 };
 
+const loadMoreAlbum = async () => {
+  if (albumLoadingMore.value || !hasMoreAlbum.value || activeAlbumId.value === null) return;
+  albumLoadingMore.value = true;
+  try {
+    await fetchAlbumImages(activeAlbumId.value, albumImages.value.length);
+  } finally {
+    albumLoadingMore.value = false;
+  }
+};
+
 const openRealAlbum = async (albumId: number) => {
   activeKey.value = '';
   activeAlbumId.value = albumId;
   albumImages.value = [];
+  albumTotal.value = 0;
   // 换相册时退出批量模式并清空选中集，避免误操作上一相册中不可见的图片
   if (batchMode.value) exitBatchMode();
   await fetchAlbumImages(albumId);
@@ -729,6 +815,7 @@ const openRealAlbum = async (albumId: number) => {
 const closeRealAlbum = () => {
   activeAlbumId.value = null;
   albumImages.value = [];
+  albumTotal.value = 0;
   if (batchMode.value) exitBatchMode();
 };
 

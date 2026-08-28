@@ -24,6 +24,8 @@
   // 边框
   --border-base: rgba(62, 55, 40, 0.1);
   --border-hover: rgba(3, 182, 170, 0.28);
+  // 弹窗 ghost 按钮边框（比 --border-base 更明显，确保按钮轮廓清晰）
+  --btn-ghost-border: rgba(62, 55, 40, 0.2);
   // Header
   --header-bg: rgba(250, 249, 245, 0.78);
   --header-border: rgba(62, 55, 40, 0.08);
@@ -48,6 +50,8 @@ html.dark {
   // 边框
   --border-base: rgba(255, 255, 255, 0.09);
   --border-hover: rgba(3, 182, 170, 0.32);
+  // 弹窗 ghost 按钮边框（暗色下提升可见度，避免 0.09 太淡看不清按钮）
+  --btn-ghost-border: rgba(255, 255, 255, 0.22);
   // Header
   --header-bg: rgba(17, 16, 14, 0.82);
   --header-border: rgba(255, 255, 255, 0.07);
@@ -225,5 +229,74 @@ button {
 @media screen and (max-width: 480px) {
   body > #app {
     padding: 3.5rem 0.5rem 1rem;
+  }
+}
+
+// ============ 弹窗底部按钮（全局） ============
+// radix-vue 的 DialogPortal 把弹窗渲染到 document.body 末尾，脱离各页面组件 DOM，
+// 因此各页面 <style scoped> 里定义的 .dialog-footer / .btn 对弹窗内按钮不生效。
+// 这里用全局样式统一覆盖所有页面的弹窗（Profile/Settings/Upload 等共用）。
+// 用 .dialog-footer 前缀限定，避免污染各页面自身的 .btn 类。
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+
+  .btn {
+    box-sizing: border-box;
+    min-width: 5.5rem;
+    padding: 0.5rem 1.25rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
+
+    &.ghost {
+      background: transparent;
+      border: 1px solid var(--btn-ghost-border);
+      color: var(--text-secondary);
+
+      &:hover {
+        color: #03b6aa;
+        border-color: rgba(3, 182, 170, 0.4);
+      }
+    }
+
+    &.primary {
+      background: #03b6aa;
+      color: #fff;
+
+      &:hover:not(:disabled) {
+        background: #029e93;
+      }
+    }
+
+    &.danger {
+      background: #ef4444;
+      color: #fff;
+
+      &:hover:not(:disabled) {
+        background: #dc2626;
+      }
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+}
+
+// 暗色主题：ghost 按钮边框提升对比度，避免看不清
+html.dark .dialog-footer .btn.ghost {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #c4bdb4;
+
+  &:hover {
+    border-color: rgba(3, 182, 170, 0.5);
+    color: #5eead4;
   }
 }

@@ -40,8 +40,8 @@
           <div class="tray-list">
             <div v-for="item in visibleItems" :key="item.id" class="tray-item" :class="['is-' + item.upload_status, { 'is-queued': item.upload_status === 'uploading' && !item.xhr }]">
               <div class="tray-thumb">
-                <img v-if="item.upload_type === 'image' && item.upload_blob" :src="item.upload_blob" :alt="item.name" />
-                <video v-else-if="item.upload_type === 'video' && item.upload_blob" :src="item.upload_blob" muted></video>
+                <img v-if="item.upload_type === 'image' && item.upload_blob" :src="item.upload_blob" :alt="item.name" loading="lazy" decoding="async" />
+                <video v-else-if="item.upload_type === 'video' && item.upload_blob" :src="item.upload_blob" muted preload="metadata" playsinline></video>
                 <span v-else class="thumb-fallback">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
@@ -154,7 +154,8 @@ const expanded = ref(false);
 const dismissed = ref(false);
 
 // ===== 长列表折叠：默认只渲染最近 N 项，老项折叠提示，避免 100 项一次性渲染卡顿 =====
-const COLLAPSED_LIMIT = 50;
+// 30 项是滚动流畅与可见性的平衡点（每项含缩略图/进度条，DOM 较重）
+const COLLAPSED_LIMIT = 30;
 const showAll = ref(false);
 // items 最新项在前（unshift），slice(0, N) 即取最近 N 项
 const visibleItems = computed(() => (showAll.value || items.length <= COLLAPSED_LIMIT ? items : items.slice(0, COLLAPSED_LIMIT)));
@@ -229,10 +230,10 @@ const fabBadge = computed(() => {
 const ringBackground = computed(() => {
   if (!hasActive.value) {
     return errorCount.value > 0
-      ? 'conic-gradient(#f87171 100%, rgba(148, 163, 184, 0.25) 0)'
-      : 'conic-gradient(#5eead4 100%, rgba(148, 163, 184, 0.25) 0)';
+      ? 'conic-gradient(#f87171 100%, rgba(148, 163, 184, 0.45) 0)'
+      : 'conic-gradient(#5eead4 100%, rgba(148, 163, 184, 0.45) 0)';
   }
-  return `conic-gradient(#5eead4 ${overallProgress.value}%, rgba(255, 255, 255, 0.25) 0)`;
+  return `conic-gradient(#5eead4 ${overallProgress.value}%, rgba(255, 255, 255, 0.4) 0)`;
 });
 
 const formatSize = (size: number) => {

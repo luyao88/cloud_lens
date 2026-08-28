@@ -1063,6 +1063,10 @@
   display: flex;
   justify-content: center;
   padding: 2rem 0 1rem;
+
+  &.grid-span-full {
+    grid-column: 1 / -1;
+  }
 }
 
 .load-more-btn {
@@ -1111,18 +1115,17 @@
   }
 }
 
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
+// 注：弹窗 .dialog-footer / .btn 样式已移至 main.less 全局，
+// 因 DialogPortal 将弹窗渲染到 body，scoped 样式无法命中。
 
 .btn {
+  box-sizing: border-box;
   padding: 0.5rem 1.25rem;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 0.5rem;
   font-size: 0.875rem;
   font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
   transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
 
@@ -1158,6 +1161,17 @@
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+}
+
+// 暗色主题：ghost 按钮默认边框 rgba(255,255,255,0.09) 太淡看不清，提升对比度
+:global(html.dark) .btn.ghost {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #c4bdb4;
+
+  &:hover {
+    border-color: rgba(3, 182, 170, 0.5);
+    color: #5eead4;
   }
 }
 

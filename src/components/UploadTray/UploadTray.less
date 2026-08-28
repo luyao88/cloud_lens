@@ -93,11 +93,11 @@
   pointer-events: auto;
   width: min(21rem, calc(100vw - 2.5rem));
   box-sizing: border-box;
-  background: var(--bg-card);
-  backdrop-filter: blur(14px);
-  border: 1px solid var(--border-base);
+  // 用高不透明度背景替代 backdrop-filter，消除滚动时白屏闪烁并避免与底层颜色混淆
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(62, 55, 40, 0.14);
   border-radius: 1rem;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
   overflow: hidden;
   transform-origin: bottom right;
 }
@@ -186,14 +186,13 @@
 // 总进度条
 .tray-progress {
   height: 3px;
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.3);
   overflow: hidden;
 
   .tray-progress-fill {
     height: 100%;
     background: linear-gradient(90deg, #03b6aa, #5eead4);
     border-radius: 0 2px 2px 0;
-    transition: width 0.25s ease;
     box-shadow: 0 0 6px rgba(3, 182, 170, 0.5);
   }
 }
@@ -205,6 +204,13 @@
   padding: 0.375rem 0.5rem 0.5rem;
   // 隔离滚动容器内部渲染对页面其他部分的影响
   contain: layout style paint;
+  // GPU 合成层提升 + 滚动链隔离 + iOS 惯性滚动，显著提升长列表滚动流畅度
+  will-change: scroll-position;
+  transform: translateZ(0);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  // 滚动方向优化：仅垂直滚动
+  scroll-behavior: auto;
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -222,7 +228,12 @@
   gap: 0.625rem;
   padding: 0.4375rem 0.375rem;
   border-radius: 0.625rem;
-  transition: background 0.2s;
+  // 跳过屏幕外列表项的渲染（布局+绘制），大幅提升长列表滚动流畅度
+  // contain-intrinsic-size 给浏览器预估高度，避免滚动条跳动
+  content-visibility: auto;
+  contain-intrinsic-size: 0 3.4rem;
+  // 列表项合成层提升，让 content-visibility 跳过绘制更高效
+  contain: layout style paint;
 
   &:hover {
     background: var(--bg-input-hover);
@@ -236,9 +247,10 @@
     color: var(--text-secondary);
   }
 
-  // 排队中：略微降低不透明度区分
+  // 排队中：用背景色 + 左边框区分，提高可见度
   &.is-queued {
-    opacity: 0.72;
+    background: rgba(148, 163, 184, 0.16);
+    box-shadow: inset 2px 0 0 rgba(148, 163, 184, 0.5);
   }
 }
 
@@ -274,6 +286,7 @@
   }
 
   // 上传中的缩略图蒙层 + 角标转圈
+  // 用纯色背景替代 backdrop-filter，避免列表滚动时持续重采样模糊导致卡顿
   .thumb-spin {
     position: absolute;
     right: 0.2rem;
@@ -281,8 +294,7 @@
     width: 1rem;
     height: 1rem;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(2px);
+    background: rgba(0, 0, 0, 0.6);
     color: #5eead4;
     display: flex;
     align-items: center;
@@ -292,6 +304,7 @@
       width: 0.65rem;
       height: 0.65rem;
       animation: tray-spin 0.9s linear infinite;
+      will-change: transform;
     }
   }
 
@@ -303,9 +316,8 @@
     width: 1rem;
     height: 1rem;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(2px);
-    color: rgba(148, 163, 184, 0.9);
+    background: rgba(0, 0, 0, 0.55);
+    color: rgba(203, 213, 225, 0.95);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -344,14 +356,13 @@
   flex: 1;
   height: 4px;
   border-radius: 2px;
-  background: rgba(148, 163, 184, 0.25);
+  background: rgba(148, 163, 184, 0.35);
   overflow: hidden;
 
   .mini-progress-fill {
     height: 100%;
     border-radius: 2px;
     background: linear-gradient(90deg, #03b6aa, #5eead4);
-    transition: width 0.25s ease;
   }
 }
 
@@ -445,21 +456,17 @@
 }
 
 .tray-panel-enter-active {
-  transition:
-    opacity 0.25s ease,
-    transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
+  // 移除 opacity 过渡避免半透明混淆；用纯 transform + 更短时间避免 50 项渲染时卡顿
+  transition: transform 0.15s ease;
 }
 
 .tray-panel-leave-active {
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
+  transition: transform 0.12s ease;
 }
 
 .tray-panel-enter-from,
 .tray-panel-leave-to {
-  opacity: 0;
-  transform: translateY(10px) scale(0.95);
+  transform: translateY(8px) scale(0.97);
 }
 
 @keyframes tray-spin {
@@ -474,13 +481,14 @@
 // ============ 暗色主题微调 ============
 :global(html.dark) {
   .tray-panel {
-    background: rgba(24, 33, 31, 0.92);
-    border-color: rgba(3, 182, 170, 0.2);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    // 用比 body 背景(#161513)更亮且带青色调的深色，明确区分边界
+    background: #1f2a2e;
+    border-color: rgba(3, 182, 170, 0.28);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
   }
 
   .tray-fab .fab-badge {
-    background: #16211f;
+    background: #1f2a2e;
   }
 }
 
