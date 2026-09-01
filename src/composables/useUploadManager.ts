@@ -21,9 +21,11 @@ const uploadAPI = `${nodeHost}/upload`;
 // 全局粘贴幂等锁：同一 100ms 窗口内的粘贴动作只放行一次（跨 Upload 实例）
 let _pasteLockTs = 0;
 /** 全局粘贴幂等锁：返回 true 表示获得锁，可消费本次粘贴；false 表示重复，丢弃。 */
-export const acquirePasteLock = (timestamp: number): boolean => {
+export const acquirePasteLock = (timestamp: number, tag = '?'): boolean => {
   const now = timestamp || Date.now();
-  if (now - _pasteLockTs < 100) return false;
+  const locked = now - _pasteLockTs < 100;
+  console.log('[PASTE-LOCK]', { tag, ts: now, prevLock: _pasteLockTs, delta: now - _pasteLockTs, result: locked ? 'BLOCKED' : 'PASS' });
+  if (locked) return false;
   _pasteLockTs = now;
   return true;
 };
@@ -540,7 +542,9 @@ const addFiles = (files: File[]) => {
   const filtered: File[] = [];
   for (const f of files) {
     const k = _fileFp(f);
-    if (_recentFileFps.some((r) => r.key === k)) continue;
+    const dup = _recentFileFps.some((r) => r.key === k);
+    console.log('[ADDFILES]', { fp: k, dedup: dup ? 'SKIP-DUP' : 'PASS', batch_size: files.length, filtered_so_far: filtered.length });
+    if (dup) continue;
     _recentFileFps.push({ ts: Date.now(), key: k });
     filtered.push(f);
   }

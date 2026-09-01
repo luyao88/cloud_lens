@@ -170,6 +170,10 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 const uploadAreaRef = ref<HTMLElement | null>(null);
 const pastingClipboard = ref(false);
 
+// 调试：每个 Upload 组件实例的唯一 id（区分 Home vs Header 抽屉）
+const _instId = 'U' + Math.random().toString(36).slice(2, 6) + (location.pathname === '/' ? '-HOME' : '-DRAWER');
+console.log(`[UPLOAD-MOUNT] instance ${_instId} registered`);
+
 // ===== 上传模式：文件 / 网址 =====
 type UploadMode = 'file' | 'url';
 const mode = ref<UploadMode>('file');
@@ -412,7 +416,9 @@ const imgTypeFormat = async (files: File[]) => {
 
 // ---------- 入口 A：上传区域级 paste（捕获阶段 + stop，焦点在上传区域时最先消费） ----------
 const onUploadAreaPaste = (e: ClipboardEvent) => {
-  if (!acquirePasteLock(e.timeStamp)) return;
+  const TAG = `${_instId}::A`;
+  console.log(`[PASTE-ENTRY] ${TAG} fired`, { tgt: (e.target as HTMLElement)?.tagName, items: e.clipboardData?.items?.length, files: e.clipboardData?.files?.length });
+  if (!acquirePasteLock(e.timeStamp, TAG)) return;
   const files = extractFilesFromClipboard(e.clipboardData);
   if (files.length > 0) {
     mode.value = 'file';
@@ -431,14 +437,21 @@ const onUploadAreaPaste = (e: ClipboardEvent) => {
 
 // ---------- 入口 B：document 级 paste（兜底，页面任意位置 Ctrl+V） ----------
 const onDocumentPaste = (e: ClipboardEvent) => {
+  const TAG = `${_instId}::B`;
   const target = e.target as HTMLElement | null;
   if (target) {
     const tag = target.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
-    // 焦点在上传区域内 → 入口 A 已处理（或 capture.stop 已经阻止冒泡到 document，但这里再兜一层）
-    if (uploadAreaRef.value && uploadAreaRef.value.contains(target)) return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
+      console.log(`[PASTE-ENTRY] ${TAG} skipped: editable target=${tag}`);
+      return;
+    }
+    if (uploadAreaRef.value && uploadAreaRef.value.contains(target)) {
+      console.log(`[PASTE-ENTRY] ${TAG} skipped: target inside uploadAreaRef`);
+      return;
+    }
   }
-  if (!acquirePasteLock(e.timeStamp)) return;
+  console.log(`[PASTE-ENTRY] ${TAG} fired (document)`, { tgt: target?.tagName, items: e.clipboardData?.items?.length, files: e.clipboardData?.files?.length });
+  if (!acquirePasteLock(e.timeStamp, TAG)) return;
   const files = extractFilesFromClipboard(e.clipboardData);
   if (files.length > 0) {
     mode.value = 'file';
@@ -455,12 +468,14 @@ const onDocumentPaste = (e: ClipboardEvent) => {
 
 // ---------- 入口 C：主动「粘贴图片」按钮 → Async Clipboard API ----------
 const pasteFromClipboard = async () => {
+  const TAG = `${_instId}::C`;
   if (!navigator.clipboard?.read) {
     toast({ title: '提示', description: '当前浏览器不支持读取剪贴板，请改用 Ctrl+V 粘贴' });
     return;
   }
   pastingClipboard.value = true;
   try {
+    console.log(`[PASTE-ENTRY] ${TAG} clicked → clipboard.read()`);
     const cbi = await navigator.clipboard.read();
     const files: File[] = [];
     const seen = new Set<string>();
@@ -475,8 +490,9 @@ const pasteFromClipboard = async () => {
         } catch { /* 单个 type 取失败不影响其他 */ }
       }
     }
+    console.log(`[PASTE-ENTRY] ${TAG} read result`, { files_found: files.length });
     if (files.length > 0) {
-      if (!acquirePasteLock(Date.now())) return;
+      if (!acquirePasteLock(Date.now(), TAG)) return;
       mode.value = 'file';
       fileListChange(files, true);
     } else {
@@ -484,7 +500,7 @@ const pasteFromClipboard = async () => {
       try { text = (await navigator.clipboard.readText()) || ''; } catch { /* ignore */ }
       const urls = extractImageUrls(text);
       if (urls.length > 0) {
-        if (!acquirePasteLock(Date.now())) return;
+        if (!acquirePasteLock(Date.now(), TAG)) return;
         mode.value = 'url';
         addUrls(urls);
         toast({ title: 'Tips', description: `已识别并添加 ${urls.length} 张图片直链` });
