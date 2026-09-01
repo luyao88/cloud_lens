@@ -187,6 +187,75 @@
       }
     }
 
+    // ===== 快捷操作按钮组：粘贴图片 / 选择文件 =====
+    // placeholder 默认 pointer-events:none，按钮组单独开启 pointer-events，位置在 p 下方
+    .quick-actions {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.15rem;
+      opacity: 0.9;
+
+      .qa-or {
+        font-size: 0.68rem;
+        color: var(--text-muted);
+        font-style: italic;
+      }
+
+      .qa-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.32rem;
+        height: 1.9rem;
+        padding: 0 0.7rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        font-family: var(--font-serif);
+        color: var(--text-secondary);
+        background: var(--bg-card-light);
+        border: 1px solid var(--border-base);
+        border-radius: 0.45rem;
+        cursor: pointer;
+        white-space: nowrap;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+
+        svg {
+          width: 0.85rem;
+          height: 0.85rem;
+          flex-shrink: 0;
+        }
+
+        &:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(3, 182, 170, 0.16);
+          border-color: rgba(3, 182, 170, 0.45);
+          color: #03b6aa;
+          background: rgba(3, 182, 170, 0.05);
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+      }
+
+      // 主操作（粘贴图片）：青玉底色强调
+      .qa-paste {
+        color: #03b6aa;
+        background: linear-gradient(135deg, rgba(3, 182, 170, 0.1), rgba(94, 234, 212, 0.08));
+        border-color: rgba(3, 182, 170, 0.35);
+
+        &:hover:not(:disabled) {
+          color: #fff;
+          background: linear-gradient(135deg, #03b6aa, #0d9488);
+          border-color: #03b6aa;
+          box-shadow: 0 6px 18px rgba(3, 182, 170, 0.35);
+        }
+      }
+    }
+
     .format-tags {
       display: flex;
       flex-wrap: wrap;
@@ -292,6 +361,50 @@
       justify-content: space-between;
       gap: 0.75rem;
       flex-shrink: 0;
+    }
+
+    .url-bar-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .url-paste-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.32rem;
+      height: 1.9rem;
+      padding: 0 0.58rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      font-family: var(--font-serif);
+      color: var(--text-secondary);
+      background: var(--bg-card-light);
+      border: 1px solid var(--border-base);
+      border-radius: 0.4rem;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+
+      svg {
+        width: 0.8rem;
+        height: 0.8rem;
+        flex-shrink: 0;
+      }
+
+      &:hover:not(:disabled) {
+        border-color: rgba(3, 182, 170, 0.4);
+        color: #03b6aa;
+        background: rgba(3, 182, 170, 0.05);
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
     }
 
     .url-hint {

@@ -19,8 +19,19 @@
   </div>
 
   <!-- ===== 文件上传 ===== -->
-  <section v-show="mode === 'file'" class="Upload" :class="{ 'is-dragover': isDragover }" @dragover.prevent="onDragover" @dragenter.prevent="onDragenter" @dragleave.prevent="onDragleave" @drop.prevent="onDrop">
-    <input type="file" multiple @change="fileListChange" :accept="UploadConfig.AcceptTypes" />
+  <section
+    ref="uploadAreaRef"
+    tabindex="0"
+    v-show="mode === 'file'"
+    class="Upload"
+    :class="{ 'is-dragover': isDragover }"
+    @click="onUploadAreaClick"
+    @paste.capture.stop.prevent="onUploadAreaPaste"
+    @dragover.prevent="onDragover"
+    @dragenter.prevent="onDragenter"
+    @dragleave.prevent="onDragleave"
+    @drop.prevent="onDrop">
+    <input ref="fileInputRef" type="file" multiple @change="fileListChange" :accept="UploadConfig.AcceptTypes" />
     <div class="placeholder">
       <div class="upload-icon-wrap">
         <svg v-if="!isDragover" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -36,8 +47,26 @@
       </div>
       <p>
         <span class="upload-title">{{ isDragover ? '释放即可上传' : '点击或拖拽上传文件' }}</span>
-        <span class="upload-hint">{{ isDragover ? `检测到 ${dragoverCount} 个文件` : `支持图片和视频 · 最大 ${UploadConfig.MaxSize}MB · 最多 ${UploadConfig.Max} 张 · 可粘贴上传` }}</span>
+        <span class="upload-hint">{{ isDragover ? `检测到 ${dragoverCount} 个文件` : `支持图片和视频 · 最大 ${UploadConfig.MaxSize}MB · 最多 ${UploadConfig.Max} 张 · 截图后粘贴直接上传` }}</span>
       </p>
+      <div class="quick-actions">
+        <button class="qa-btn qa-paste" :disabled="pastingClipboard" type="button" @click.stop="pasteFromClipboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="8" height="4" x="8" y="2" rx="1" />
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <path d="M9 14h6M9 18h4M9 10h6" />
+          </svg>
+          <span>{{ pastingClipboard ? '读取中...' : '粘贴图片' }}</span>
+        </button>
+        <span class="qa-or">或</span>
+        <button class="qa-btn qa-select" type="button" @click.stop="triggerFileSelect">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+          <span>选择文件</span>
+        </button>
+      </div>
     </div>
   </section>
 
@@ -60,10 +89,20 @@
         @keydown.meta.enter.prevent="submitUrls"
         @keydown.ctrl.enter.prevent="submitUrls"></textarea>
       <div class="url-bar">
-        <span class="url-hint" :class="{ 'is-empty': urlCount === 0, 'is-ok': urlCount > 0 }">
-          <template v-if="urlCount === 0">仅支持 jpg / png / gif / webp 等图片直链</template>
-          <template v-else>已识别 {{ urlCount }} 条图片网址</template>
-        </span>
+        <div class="url-bar-left">
+          <button class="url-paste-btn" :disabled="pastingClipboard" type="button" @click="pasteTextFromClipboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="8" height="4" x="8" y="2" rx="1" />
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <path d="M9 14h6M9 10h6" />
+            </svg>
+            <span>{{ pastingClipboard ? '读取中...' : '粘贴到文本框' }}</span>
+          </button>
+          <span class="url-hint" :class="{ 'is-empty': urlCount === 0, 'is-ok': urlCount > 0 }">
+            <template v-if="urlCount === 0">仅支持 jpg / png / gif / webp 等图片直链</template>
+            <template v-else>已识别 {{ urlCount }} 条图片网址</template>
+          </span>
+        </div>
         <button class="url-submit" :disabled="urlCount === 0" @click="submitUrls">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14" />
@@ -126,21 +165,20 @@ const { items, addFiles, addUrls, targetAlbum, setTargetAlbum, albums, albumTree
 const props = defineProps(['UploadConfig']);
 const UploadConfig = ref<any>(props.UploadConfig);
 
+// ===== Refs =====
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const uploadAreaRef = ref<HTMLElement | null>(null);
+const pastingClipboard = ref(false);
+
 // ===== 上传模式：文件 / 网址 =====
-// 默认 file，保持原有行为；用户切到 url 时显示文本输入区
 type UploadMode = 'file' | 'url';
 const mode = ref<UploadMode>('file');
 
 // ===== 网址上传：textarea 输入与识别 =====
 const urlInput = ref('');
-// 实时识别 textarea 中合法的图片直链（去重后）
 const urlCount = computed(() => extractImageUrls(urlInput.value).length);
+const onUrlInput = () => { /* urlCount 自动更新 */ };
 
-const onUrlInput = () => {
-  // 输入驱动 urlCount 自动更新，这里仅作占位钩子，便于将来扩展
-};
-
-// 提交识别到的网址到上传队列
 const submitUrls = () => {
   const urls = extractImageUrls(urlInput.value);
   if (!urls.length) {
@@ -153,21 +191,14 @@ const submitUrls = () => {
 };
 
 // ===== 上传目标相册 =====
-// 登录态/相册表/同步中标志全部来自全局管理器：
-// Home 面板与 Header 抽屉两个实例共享同一份状态，任一处打开都会先同步再显示
-
-// 相册选项直接使用全局管理器的 albumTreeOptions
 const albumOptions = albumTreeOptions;
-
 const selectValue = computed(() => (targetAlbum.value === undefined ? 'default' : targetAlbum.value === null ? 'none' : String(targetAlbum.value)));
-
 const defaultAlbumLabel = computed(() => {
   if (defaultAlbumId.value === null) return '未分组';
   const hit = albums.value.find((a) => a.id === defaultAlbumId.value);
   return hit?.name || '未分组';
 });
 
-// 未登录时允许浏览但拦截写操作：弹出登录弹窗引导登录
 const authOpen = ref(false);
 const requireLogin = (): boolean => {
   if (uploadLoggedIn.value) return true;
@@ -175,7 +206,6 @@ const requireLogin = (): boolean => {
   return false;
 };
 
-// 登录弹窗成功：广播事件触发全局状态刷新（useUploadManager 拉取相册、Header 刷新用户）
 const onAuthDialogSuccess = () => {
   window.dispatchEvent(new Event('auth:changed'));
 };
@@ -183,7 +213,6 @@ const onAuthDialogSuccess = () => {
 const onSelectChange = (e: Event) => {
   const el = e.target as HTMLSelectElement;
   if (!requireLogin()) {
-    // 还原为当前生效值
     el.value = selectValue.value;
     return;
   }
@@ -193,7 +222,6 @@ const onSelectChange = (e: Event) => {
   else setTargetAlbum(Number(v));
 };
 
-// 设为默认上传相册
 const settingDefault = ref(false);
 const setDefaultAlbum = async () => {
   if (targetAlbum.value === undefined || settingDefault.value) return;
@@ -223,13 +251,11 @@ const setDefaultAlbum = async () => {
 const createOpen = ref(false);
 const createName = ref('');
 const creating = ref(false);
-
 const openCreateDialog = () => {
   if (!requireLogin()) return;
   createName.value = '';
   createOpen.value = true;
 };
-
 const confirmCreate = async () => {
   const name = createName.value.trim();
   if (!name || creating.value) return;
@@ -256,12 +282,18 @@ const confirmCreate = async () => {
   }
 };
 
+// ===== 上传区域点击：触发选择文件（不拦截子按钮的 .stop） =====
+const onUploadAreaClick = () => {
+  uploadAreaRef.value?.focus({ preventScroll: true });
+};
+const triggerFileSelect = () => {
+  fileInputRef.value?.click();
+};
+
 // ===== 拖拽视觉同步 =====
-// 依赖 dragenter/dragleave 计数避免子元素冒泡导致的闪烁
 let dragCounter = 0;
 const isDragover = ref(false);
 const dragoverCount = ref(0);
-
 const onDragover = (e: DragEvent) => {
   if (e.dataTransfer?.types?.includes('Files')) {
     dragoverCount.value = e.dataTransfer.items?.length || 1;
@@ -289,21 +321,18 @@ const onDrop = (e: DragEvent) => {
   }
 };
 
-// 文件列表变化事件（选择 / 拖拽 / 粘贴）
+// ===== 文件校验 + 入队（被 paste / drag / select 复用） =====
 const fileListChange = async (v: Event | File[], type: boolean = false) => {
   let targetFileListArr: any[] = [];
   if (!type) {
     if (!(v as Event).target) return;
     targetFileListArr = Array.from(((v as Event).target as HTMLInputElement).files || []);
-    // 重置 input value 允许重复选择同一文件
     ((v as Event).target as HTMLInputElement).value = '';
   } else {
     targetFileListArr = Array.from(v as File[]);
   }
   if (!targetFileListArr.length) return;
-  // 处理图片格式
   targetFileListArr = await imgTypeFormat(targetFileListArr);
-  // 校验文件格式和大小
   const acceptTypes = UploadConfig.value.AcceptTypes.split(',').map((t: string) => t.trim());
   const maxSize = UploadConfig.value.MaxSize * 1024 * 1024;
   const validFiles: File[] = [];
@@ -327,7 +356,6 @@ const fileListChange = async (v: Event | File[], type: boolean = false) => {
     toast({ title: '文件被拒绝', description: rejectedFiles.join('、') });
   }
   if (!validFiles.length) return;
-  // 超过数量上限直接提示并停止上传，不处理任何文件
   if (UploadConfig.value.Max && validFiles.length > UploadConfig.value.Max) {
     toast({
       title: '上传数量限制',
@@ -339,7 +367,7 @@ const fileListChange = async (v: Event | File[], type: boolean = false) => {
   addFiles(validFiles);
 };
 
-// 图片格式webp 转换为png
+// 图片格式 webp → png
 const imgTypeFormat = async (files: File[]) => {
   const _fileList = Array.from(files || []);
   const convertWebPToPNG = async (file: File): Promise<File> => {
@@ -368,42 +396,232 @@ const imgTypeFormat = async (files: File[]) => {
   return await Promise.all(_fileList.map(convertWebPToPNG));
 };
 
-// 粘贴上传：支持文件与图片直链
-// - 剪贴板含文件 → 走文件上传
-// - 剪贴板无文件但文本含 http(s) 图片直链 → 走网址上传（自动切到网址模式以便看到队列）
-// - 输入框/文本域/可编辑元素内的粘贴一律不拦截，让用户正常编辑文本
-const pasteUpload = (v: any) => {
-  const target = v.target as HTMLElement;
-  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-    return;
-  }
-  const pasteData = v.clipboardData || (window as any).clipboardData;
-  const files = pasteData.files;
-  if (files && files.length > 0) {
-    v.preventDefault();
-    fileListChange(files, true);
-    return;
-  }
-  // 无文件时检查文本是否含图片直链
-  const text = pasteData?.getData?.('text/plain') || '';
-  if (text) {
-    const urls = extractImageUrls(text);
-    if (urls.length > 0) {
-      v.preventDefault();
-      mode.value = 'url';
-      addUrls(urls);
-      toast({ title: 'Tips', description: `已从剪贴板识别并添加 ${urls.length} 张图片直链` });
+/* ============================================================
+ *  统一粘贴体系（避免补丁叠加，只保留一套解析 + 一条消费链路）
+ *  ------------------------------------------------------------
+ *  入口 A：上传区域 @paste（capture.stop.prevent，焦点在上传区域时最先拿到）
+ *  入口 B：document paste（兜底，页面任意位置 Ctrl+V）
+ *  入口 C：主动按钮「粘贴图片」→  Async Clipboard API (navigator.clipboard.read)
+ *  入口 D：网址模式「粘贴到文本框」按钮 →  Async Clipboard API readText
+ *
+ *  幂等：同一 paste 动作 (A/B) 可能经冒泡触发两次，用 _lastPasteTs
+ *       在 100ms 内去重；C/D 是用户主动点击，天然不与 A/B 重合。
+ *  解析：统一调用 extractPastePayload(clipboardData)，返回 { files, urls }。
+ * ============================================================ */
+
+// 幂等锁：同一 timestamp 同一次粘贴动作只消费一次
+let _lastPasteTs = 0;
+const _acquirePasteLock = (ts: number): boolean => {
+  const now = ts || Date.now();
+  if (now - _lastPasteTs < 100) return false;
+  _lastPasteTs = now;
+  return true;
+};
+
+// 扩展名 → MIME（兜底用）
+const _mimeByExt: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+  apng: 'image/apng', tif: 'image/tiff', tiff: 'image/tiff', bmp: 'image/bmp',
+  webp: 'image/webp', mp4: 'video/mp4', webm: 'video/webm',
+};
+
+// 为 File 补齐 type（截图/复制图片时 File.type 常为空，会被 acceptTypes 精确匹配拒绝）
+const _normalizeFile = (f: File, hintedMime = ''): File => {
+  if (f.type) return f;
+  let mime = hintedMime && /\//.test(hintedMime) ? hintedMime : '';
+  if (!mime) {
+    const m = (f.name || '').toLowerCase().match(/\.(jpe?g|png|gif|apng|tiff?|bmp|webp|mp4|webm)$/);
+    if (m) {
+      const key = m[1].replace('jpg', 'jpeg').replace('tif', 'tiff');
+      mime = _mimeByExt[key] || '';
     }
+  }
+  if (!mime) mime = 'image/png';
+  const name = f.name || `pasted-${Date.now()}.${mime.split('/')[1] || 'png'}`;
+  return new File([f], name, { type: mime });
+};
+
+// 生成 File fingerprint 用于单次解析内去重（items + files 可能同时含同一张图）
+const _fp = (f: File): string => `${f.name}|${f.size}|${f.type}|${f.lastModified || 0}`;
+
+/**
+ * 统一解析剪贴板 / DataTransfer 数据，产出可消费的 { files, urls }
+ * 顺序：优先 items（getAsFile，覆盖截图/复制图片对象）→ 再 files 兜底 → 最后 text/plain 里的图片直链
+ */
+interface PastePayload {
+  files: File[];
+  urls: string[];
+}
+const extractPastePayload = (
+  cb: DataTransfer | ClipboardEvent['clipboardData'] | null,
+): PastePayload => {
+  const files: File[] = [];
+  const seen = new Set<string>();
+  if (!cb) return { files, urls: [] };
+
+  // 1) items 优先（覆盖微信截图、Snipaste、浏览器右键「复制图片」）
+  const items = (cb as DataTransfer).items as DataTransferItemList | undefined;
+  if (items && items.length) {
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind !== 'file') continue;
+      const f = it.getAsFile();
+      if (!f) continue;
+      const nf = _normalizeFile(f, it.type);
+      const k = _fp(nf);
+      if (!seen.has(k)) {
+        seen.add(k);
+        files.push(nf);
+      }
+    }
+  }
+
+  // 2) files 兜底（文件管理器复制、部分旧浏览器）
+  const fs = (cb as DataTransfer).files as FileList | undefined;
+  if (fs && fs.length) {
+    for (let i = 0; i < fs.length; i++) {
+      const nf = _normalizeFile(fs[i]);
+      const k = _fp(nf);
+      if (!seen.has(k)) {
+        seen.add(k);
+        files.push(nf);
+      }
+    }
+  }
+
+  // 3) 文本里的图片直链
+  let text = '';
+  try { text = (cb as DataTransfer).getData?.('text/plain') || ''; } catch { /* ignore */ }
+  const urls = extractImageUrls(text);
+  return { files, urls };
+};
+
+/** 消费 payload：有文件走文件上传（切 file 模式显示托盘中图片预览）；否则走网址上传 */
+const consumePayload = (p: PastePayload) => {
+  if (p.files.length > 0) {
+    mode.value = 'file';
+    fileListChange(p.files, true);
+    return true;
+  }
+  if (p.urls.length > 0) {
+    mode.value = 'url';
+    addUrls(p.urls);
+    toast({ title: 'Tips', description: `已识别并添加 ${p.urls.length} 张图片直链` });
+    return true;
+  }
+  return false;
+};
+
+// ---------- 入口 A：上传区域级 paste（捕获阶段 + stop，焦点在上传区域时最先消费） ----------
+const onUploadAreaPaste = (e: ClipboardEvent) => {
+  // 上传区域可聚焦（tabindex=0），用户点过上传区域后 Ctrl+V 会触发这里。
+  // 因为 @paste.capture.stop.prevent 了冒泡，不会再到 document paste（入口 B），不会重复。
+  if (!_acquirePasteLock(e.timeStamp)) return;
+  const consumed = consumePayload(extractPastePayload(e.clipboardData));
+  if (!consumed) {
+    toast({ title: 'Tips', description: '剪贴板中未找到图片或图片直链', variant: 'destructive' });
+  }
+};
+
+// ---------- 入口 B：document 级 paste（兜底，页面任意位置 Ctrl+V） ----------
+//  只有当入口 A 没吞掉事件（焦点不在上传区域内的可聚焦控件上）时才会到这里。
+//  仍然要拦截输入框/文本域/可编辑：让用户正常编辑文本。
+const onDocumentPaste = (e: ClipboardEvent) => {
+  const target = e.target as HTMLElement | null;
+  if (target) {
+    const tag = target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
+    // 焦点已经在上传区域内的可聚焦控件上（按钮等）→ 入口 A 会处理
+    if (uploadAreaRef.value && uploadAreaRef.value.contains(target)) return;
+  }
+  if (!_acquirePasteLock(e.timeStamp)) return;
+  consumePayload(extractPastePayload(e.clipboardData));
+};
+
+// ---------- 入口 C：主动「粘贴图片」按钮 → Async Clipboard API ----------
+//  即使 document paste 因浏览器策略不触发，点击按钮是用户手势，可以直接读剪贴板。
+const pasteFromClipboard = async () => {
+  if (!navigator.clipboard?.read) {
+    toast({ title: '提示', description: '当前浏览器不支持读取剪贴板，请改用 Ctrl+V 粘贴' });
+    return;
+  }
+  pastingClipboard.value = true;
+  try {
+    const items = await navigator.clipboard.read();
+    const files: File[] = [];
+    const seen = new Set<string>();
+    for (const item of items) {
+      for (const t of item.types) {
+        if (!t.startsWith('image/')) continue;
+        try {
+          const blob = await item.getType(t);
+          const f = new File([blob], `clipboard-${Date.now()}.${t.split('/')[1] || 'png'}`, { type: t });
+          const k = _fp(f);
+          if (!seen.has(k)) {
+            seen.add(k);
+            files.push(f);
+          }
+        } catch { /* 单个 type 取失败不影响其他 */ }
+      }
+    }
+    if (files.length > 0) {
+      _acquirePasteLock(Date.now());
+      mode.value = 'file';
+      fileListChange(files, true);
+    } else {
+      // 没取到图片，再尝试纯文本里的直链（兜底）
+      let text = '';
+      try { text = (await navigator.clipboard.readText()) || ''; } catch { /* ignore */ }
+      const urls = extractImageUrls(text);
+      if (urls.length > 0) {
+        _acquirePasteLock(Date.now());
+        mode.value = 'url';
+        addUrls(urls);
+        toast({ title: 'Tips', description: `已识别并添加 ${urls.length} 张图片直链` });
+      } else {
+        toast({ title: 'Tips', description: '剪贴板中未找到图片或图片直链，先截图或复制图片再试', variant: 'destructive' });
+      }
+    }
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    if (/permission|denied|not allowed|blocked/i.test(msg)) {
+      toast({ title: '无法读取剪贴板', description: '请授权剪贴板读取权限，或改用 Ctrl+V 粘贴', variant: 'destructive' });
+    } else {
+      toast({ title: '读取剪贴板失败', description: msg || '未知错误', variant: 'destructive' });
+    }
+  } finally {
+    pastingClipboard.value = false;
+  }
+};
+
+// ---------- 入口 D：网址模式「粘贴到文本框」按钮 ----------
+const pasteTextFromClipboard = async () => {
+  if (!navigator.clipboard?.readText) {
+    toast({ title: '提示', description: '当前浏览器不支持读取剪贴板，请用 Ctrl+V 粘贴' });
+    return;
+  }
+  pastingClipboard.value = true;
+  try {
+    const t = await navigator.clipboard.readText();
+    if (t) {
+      urlInput.value = urlInput.value ? `${urlInput.value.trimEnd()}\n${t}` : t;
+      toast({ title: 'Tips', description: `已粘贴文本（识别到 ${urlCount.value} 条）` });
+    } else {
+      toast({ title: 'Tips', description: '剪贴板里没有文本内容', variant: 'destructive' });
+    }
+  } catch (err: any) {
+    toast({ title: '无法读取剪贴板', description: err?.message || '请授权剪贴板权限', variant: 'destructive' });
+  } finally {
+    pastingClipboard.value = false;
   }
 };
 
 onMounted(() => {
-  document.addEventListener('paste', pasteUpload);
-  // 挂载时全局同步一次（抽屉每次打开都会重新挂载 → 每次打开都拿到最新数据）
+  document.addEventListener('paste', onDocumentPaste);
   refreshUploadState();
 });
 onUnmounted(() => {
-  document.removeEventListener('paste', pasteUpload);
+  document.removeEventListener('paste', onDocumentPaste);
 });
 </script>
 
