@@ -17,16 +17,31 @@ const uploadAPI = `${nodeHost}/upload`;
 // 经验 718132：页面可能有多个 Upload 组件实例（Home 面板 + Header 抽屉），
 // 每个实例各注册 document paste 监听器 → 同一次 Ctrl+V 触发两次独立消费。
 // 把锁、解析、addFiles/addUrls 的去重都提升到模块级（单例），所有实例共享。
+//
+// 关键：用 globalThis 兜底，即使 Vite 把模块拆到多个 chunk（导致模块被加载两次、
+// 产生两份模块级变量副本），globalThis 上的状态仍然是全局唯一的。
+
+interface UploadGlobalState {
+  pasteLockTs: number;
+  recentFileFps: { ts: number; key: string }[];
+  recentUrls: { ts: number; url: string }[];
+}
+
+const _G_KEY = '__cloudLensUploadState';
+const _g: UploadGlobalState = (globalThis as any)[_G_KEY] || ((globalThis as any)[_G_KEY] = {
+  pasteLockTs: 0,
+  recentFileFps: [],
+  recentUrls: [],
+});
 
 // 全局粘贴幂等锁：同一 100ms 窗口内的粘贴动作只放行一次（跨 Upload 实例）
-let _pasteLockTs = 0;
 /** 全局粘贴幂等锁：返回 true 表示获得锁，可消费本次粘贴；false 表示重复，丢弃。 */
 export const acquirePasteLock = (timestamp: number, tag = '?'): boolean => {
   const now = timestamp || Date.now();
-  const locked = now - _pasteLockTs < 100;
-  console.log('[PASTE-LOCK]', { tag, ts: now, prevLock: _pasteLockTs, delta: now - _pasteLockTs, result: locked ? 'BLOCKED' : 'PASS' });
+  const locked = now - _g.pasteLockTs < 100;
+  console.log('[PASTE-LOCK]', { tag, ts: now, prevLock: _g.pasteLockTs, delta: now - _g.pasteLockTs, result: locked ? 'BLOCKED' : 'PASS' });
   if (locked) return false;
-  _pasteLockTs = now;
+  _g.pasteLockTs = now;
   return true;
 };
 
@@ -53,17 +68,18 @@ const _normalizeFile = (f: File, hintedMime = ''): File => {
   return new File([f], name, { type: mime });
 };
 
-/** File fingerprint：name/size/type/lastModified —— 用于同一次粘贴内 items + files 去重，以及 3s 跨粘贴窗口去重 */
-const _fileFp = (f: File): string => `${f.name}|${f.size}|${f.type}|${f.lastModified || 0}`;
+/** File fingerprint：name/size/type —— 用于同一次粘贴内 items + files 去重，以及 3s 跨粘贴窗口去重
+ *  注意：去掉 lastModified！因为 DataTransferItem.getAsFile() 每次调用可能返回新的 File 对象，
+ *  其 lastModified 可能是 Date.now()，两次调用间微差导致 fingerprint 不同 → 去重失效 */
+const _fileFp = (f: File): string => `${f.name}|${f.size}|${f.type}`;
+
+const _WINDOW_MS = 3000;
 
 // 跨粘贴动作的文件窗口去重（3s 内相同 fingerprint 不重复入队）
-const _recentFileFps: { ts: number; key: string }[] = [];
-const _recentUrls: { ts: number; url: string }[] = [];
-const _WINDOW_MS = 3000;
 const _pruneWindow = () => {
   const now = Date.now();
-  for (let i = _recentFileFps.length - 1; i >= 0; i--) if (now - _recentFileFps[i].ts > _WINDOW_MS) _recentFileFps.splice(i, 1);
-  for (let i = _recentUrls.length - 1; i >= 0; i--) if (now - _recentUrls[i].ts > _WINDOW_MS) _recentUrls.splice(i, 1);
+  for (let i = _g.recentFileFps.length - 1; i >= 0; i--) if (now - _g.recentFileFps[i].ts > _WINDOW_MS) _g.recentFileFps.splice(i, 1);
+  for (let i = _g.recentUrls.length - 1; i >= 0; i--) if (now - _g.recentUrls[i].ts > _WINDOW_MS) _g.recentUrls.splice(i, 1);
 };
 
 /**
@@ -542,10 +558,10 @@ const addFiles = (files: File[]) => {
   const filtered: File[] = [];
   for (const f of files) {
     const k = _fileFp(f);
-    const dup = _recentFileFps.some((r) => r.key === k);
+    const dup = _g.recentFileFps.some((r) => r.key === k);
     console.log('[ADDFILES]', { fp: k, dedup: dup ? 'SKIP-DUP' : 'PASS', batch_size: files.length, filtered_so_far: filtered.length });
     if (dup) continue;
-    _recentFileFps.push({ ts: Date.now(), key: k });
+    _g.recentFileFps.push({ ts: Date.now(), key: k });
     filtered.push(f);
   }
   if (!filtered.length) return;
@@ -643,8 +659,8 @@ const addUrls = (urls: string[]) => {
   _pruneWindow();
   const filtered: string[] = [];
   for (const u of urls) {
-    if (_recentUrls.some((r) => r.url === u)) continue;
-    _recentUrls.push({ ts: Date.now(), url: u });
+    if (_g.recentUrls.some((r) => r.url === u)) continue;
+    _g.recentUrls.push({ ts: Date.now(), url: u });
     filtered.push(u);
   }
   if (!filtered.length) return;
