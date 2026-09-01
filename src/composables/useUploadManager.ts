@@ -194,8 +194,18 @@ const refreshUploadState = async (): Promise<void> => {
       const data = await res.json();
       if (token !== syncToken) return;
       if (data.success) {
-        albums.value = data.albums || [];
+        const list = data.albums || [];
+        albums.value = list;
         defaultAlbumId.value = data.default_album_id ?? null;
+        // 删除相册后校验：targetAlbum / defaultAlbumId 可能指向已不存在的相册 → 重置默认
+        if (targetAlbum.value !== undefined && targetAlbum.value !== null) {
+          if (!list.some((a: AlbumRow) => a.id === targetAlbum.value)) {
+            setTargetAlbum(undefined);
+          }
+        }
+        if (defaultAlbumId.value !== null && !list.some((a: AlbumRow) => a.id === defaultAlbumId.value)) {
+          defaultAlbumId.value = null;
+        }
         albumsLoaded.value = true;
       }
     } catch {
