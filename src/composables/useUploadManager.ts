@@ -13,6 +13,97 @@ import { useToast } from '@/components/ui/toast/use-toast';
 const nodeHost = import.meta.env.VITE_IMG_API_URL || location.origin;
 const uploadAPI = `${nodeHost}/upload`;
 
+// ==================== 全局共享的粘贴锁 & 剪贴板解析 ====================
+// 经验 718132：页面可能有多个 Upload 组件实例（Home 面板 + Header 抽屉），
+// 每个实例各注册 document paste 监听器 → 同一次 Ctrl+V 触发两次独立消费。
+// 把锁、解析、addFiles/addUrls 的去重都提升到模块级（单例），所有实例共享。
+
+// 全局粘贴幂等锁：同一 100ms 窗口内的粘贴动作只放行一次（跨 Upload 实例）
+let _pasteLockTs = 0;
+/** 全局粘贴幂等锁：返回 true 表示获得锁，可消费本次粘贴；false 表示重复，丢弃。 */
+export const acquirePasteLock = (timestamp: number): boolean => {
+  const now = timestamp || Date.now();
+  if (now - _pasteLockTs < 100) return false;
+  _pasteLockTs = now;
+  return true;
+};
+
+// 扩展名 → MIME（兜底：截图工具/复制图片时 File.type 常为空）
+const _MIME_BY_EXT: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+  apng: 'image/apng', tif: 'image/tiff', tiff: 'image/tiff', bmp: 'image/bmp',
+  webp: 'image/webp', mp4: 'video/mp4', webm: 'video/webm',
+};
+
+/** 补齐 File.type：优先 hintedMime → 扩展名 → 兜底 image/png */
+const _normalizeFile = (f: File, hintedMime = ''): File => {
+  if (f.type) return f;
+  let mime = hintedMime && /\//.test(hintedMime) ? hintedMime : '';
+  if (!mime) {
+    const m = (f.name || '').toLowerCase().match(/\.(jpe?g|png|gif|apng|tiff?|bmp|webp|mp4|webm)$/);
+    if (m) {
+      const key = m[1].replace('jpg', 'jpeg').replace('tif', 'tiff');
+      mime = _MIME_BY_EXT[key] || '';
+    }
+  }
+  if (!mime) mime = 'image/png';
+  const name = f.name || `pasted-${Date.now()}.${mime.split('/')[1] || 'png'}`;
+  return new File([f], name, { type: mime });
+};
+
+/** File fingerprint：name/size/type/lastModified —— 用于同一次粘贴内 items + files 去重，以及 3s 跨粘贴窗口去重 */
+const _fileFp = (f: File): string => `${f.name}|${f.size}|${f.type}|${f.lastModified || 0}`;
+
+// 跨粘贴动作的文件窗口去重（3s 内相同 fingerprint 不重复入队）
+const _recentFileFps: { ts: number; key: string }[] = [];
+const _recentUrls: { ts: number; url: string }[] = [];
+const _WINDOW_MS = 3000;
+const _pruneWindow = () => {
+  const now = Date.now();
+  for (let i = _recentFileFps.length - 1; i >= 0; i--) if (now - _recentFileFps[i].ts > _WINDOW_MS) _recentFileFps.splice(i, 1);
+  for (let i = _recentUrls.length - 1; i >= 0; i--) if (now - _recentUrls[i].ts > _WINDOW_MS) _recentUrls.splice(i, 1);
+};
+
+/**
+ * 统一解析剪贴板/DataTransfer 数据 → 去重后的 File[]。
+ * 顺序：items 优先（getAsFile，覆盖截图/复制图片对象）→ files 兜底 → fingerprint 去重 → MIME 补齐。
+ */
+export const extractFilesFromClipboard = (cb: DataTransfer | ClipboardEvent['clipboardData'] | null): File[] => {
+  const out: File[] = [];
+  const seen = new Set<string>();
+  if (!cb) return out;
+
+  const items = (cb as DataTransfer).items as DataTransferItemList | undefined;
+  if (items && items.length) {
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind !== 'file') continue;
+      const f = it.getAsFile();
+      if (!f) continue;
+      const nf = _normalizeFile(f, it.type);
+      const k = _fileFp(nf);
+      if (!seen.has(k)) { seen.add(k); out.push(nf); }
+    }
+  }
+
+  const fs = (cb as DataTransfer).files as FileList | undefined;
+  if (fs && fs.length) {
+    for (let i = 0; i < fs.length; i++) {
+      const nf = _normalizeFile(fs[i]);
+      const k = _fileFp(nf);
+      if (!seen.has(k)) { seen.add(k); out.push(nf); }
+    }
+  }
+  return out;
+};
+
+/** 从剪贴板取文本并解析图片直链（兜底用） */
+export const extractUrlsFromClipboard = (cb: DataTransfer | ClipboardEvent['clipboardData'] | null): string[] => {
+  let t = '';
+  try { t = (cb as DataTransfer).getData?.('text/plain') || ''; } catch { /* ignore */ }
+  return extractImageUrls(t);
+};
+
 export type UploadStatus = 'uploading' | 'success' | 'error';
 
 export interface UploadItem {
@@ -433,6 +524,7 @@ const releaseItem = (item: UploadItem) => {
 
 // ===== 对外接口 =====
 const addFiles = (files: File[]) => {
+  if (!files.length) return;
   // 检查单次选择文件数量限制（100张）
   if (files.length > 100) {
     toast({
@@ -443,10 +535,21 @@ const addFiles = (files: File[]) => {
     return; // 停止上传，不处理任何文件
   }
 
+  // 跨粘贴窗口去重：3s 内相同 fingerprint 的 File 直接丢弃（第二道防线，防多实例各自突破锁后仍重复入队）
+  _pruneWindow();
+  const filtered: File[] = [];
+  for (const f of files) {
+    const k = _fileFp(f);
+    if (_recentFileFps.some((r) => r.key === k)) continue;
+    _recentFileFps.push({ ts: Date.now(), key: k });
+    filtered.push(f);
+  }
+  if (!filtered.length) return;
+
   // 先创建所有条目并 unshift 到列表（最新项在前），再倒序入队上传
   // 这样列表顶部的项先上传，视觉上从上往下
   const newItems: UploadItem[] = [];
-  files.forEach((file) => {
+  filtered.forEach((file) => {
     // 用 reactive 包裹，确保 XHR 回调中修改属性能触发视图更新
     // 否则 item 是原始对象引用，不经过代理的 set 拦截器，Vue 无法感知变化
     const item: UploadItem = reactive({
@@ -532,8 +635,17 @@ const addUrls = (urls: string[]) => {
     });
     return;
   }
+  // 跨粘贴窗口去重：3s 内相同 URL 不重复入队
+  _pruneWindow();
+  const filtered: string[] = [];
+  for (const u of urls) {
+    if (_recentUrls.some((r) => r.url === u)) continue;
+    _recentUrls.push({ ts: Date.now(), url: u });
+    filtered.push(u);
+  }
+  if (!filtered.length) return;
   const newItems: UploadItem[] = [];
-  urls.forEach((url) => {
+  filtered.forEach((url) => {
     const item: UploadItem = reactive({
       id: genId(),
       file: null,

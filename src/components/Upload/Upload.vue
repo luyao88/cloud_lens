@@ -157,7 +157,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useToast } from '@/components/ui/toast/use-toast';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
-import { useUploadManager, extractImageUrls } from '@/composables/useUploadManager';
+import { useUploadManager, extractImageUrls, acquirePasteLock, extractFilesFromClipboard, extractUrlsFromClipboard } from '@/composables/useUploadManager';
 const { toast } = useToast();
 // 上传队列由全局管理器维护，切换页面不会中断
 const { items, addFiles, addUrls, targetAlbum, setTargetAlbum, albums, albumTreeOptions, defaultAlbumId, fetchAlbums, refreshUploadState, uploadLoggedIn } = useUploadManager();
@@ -397,149 +397,63 @@ const imgTypeFormat = async (files: File[]) => {
 };
 
 /* ============================================================
- *  统一粘贴体系（避免补丁叠加，只保留一套解析 + 一条消费链路）
+ *  粘贴体系（注意：页面有 2 个 Upload 组件实例，Home 面板 + Header 抽屉）
  *  ------------------------------------------------------------
  *  入口 A：上传区域 @paste（capture.stop.prevent，焦点在上传区域时最先拿到）
  *  入口 B：document paste（兜底，页面任意位置 Ctrl+V）
  *  入口 C：主动按钮「粘贴图片」→  Async Clipboard API (navigator.clipboard.read)
  *  入口 D：网址模式「粘贴到文本框」按钮 →  Async Clipboard API readText
  *
- *  幂等：同一 paste 动作 (A/B) 可能经冒泡触发两次，用 _lastPasteTs
- *       在 100ms 内去重；C/D 是用户主动点击，天然不与 A/B 重合。
- *  解析：统一调用 extractPastePayload(clipboardData)，返回 { files, urls }。
+ *  幂等/去重：所有入口都通过 useUploadManager 的 **模块级** 共享逻辑
+ *  - acquirePasteLock(ts)：100ms 窗口全局只放行一次（跨实例）
+ *  - extractFilesFromClipboard(cb)：items + files 统一解析 + 单次去重 + MIME 补齐
+ *  - addFiles/addUrls 内部：3s 跨粘贴窗口再去重（第二道防线）
  * ============================================================ */
-
-// 幂等锁：同一 timestamp 同一次粘贴动作只消费一次
-let _lastPasteTs = 0;
-const _acquirePasteLock = (ts: number): boolean => {
-  const now = ts || Date.now();
-  if (now - _lastPasteTs < 100) return false;
-  _lastPasteTs = now;
-  return true;
-};
-
-// 扩展名 → MIME（兜底用）
-const _mimeByExt: Record<string, string> = {
-  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
-  apng: 'image/apng', tif: 'image/tiff', tiff: 'image/tiff', bmp: 'image/bmp',
-  webp: 'image/webp', mp4: 'video/mp4', webm: 'video/webm',
-};
-
-// 为 File 补齐 type（截图/复制图片时 File.type 常为空，会被 acceptTypes 精确匹配拒绝）
-const _normalizeFile = (f: File, hintedMime = ''): File => {
-  if (f.type) return f;
-  let mime = hintedMime && /\//.test(hintedMime) ? hintedMime : '';
-  if (!mime) {
-    const m = (f.name || '').toLowerCase().match(/\.(jpe?g|png|gif|apng|tiff?|bmp|webp|mp4|webm)$/);
-    if (m) {
-      const key = m[1].replace('jpg', 'jpeg').replace('tif', 'tiff');
-      mime = _mimeByExt[key] || '';
-    }
-  }
-  if (!mime) mime = 'image/png';
-  const name = f.name || `pasted-${Date.now()}.${mime.split('/')[1] || 'png'}`;
-  return new File([f], name, { type: mime });
-};
-
-// 生成 File fingerprint 用于单次解析内去重（items + files 可能同时含同一张图）
-const _fp = (f: File): string => `${f.name}|${f.size}|${f.type}|${f.lastModified || 0}`;
-
-/**
- * 统一解析剪贴板 / DataTransfer 数据，产出可消费的 { files, urls }
- * 顺序：优先 items（getAsFile，覆盖截图/复制图片对象）→ 再 files 兜底 → 最后 text/plain 里的图片直链
- */
-interface PastePayload {
-  files: File[];
-  urls: string[];
-}
-const extractPastePayload = (
-  cb: DataTransfer | ClipboardEvent['clipboardData'] | null,
-): PastePayload => {
-  const files: File[] = [];
-  const seen = new Set<string>();
-  if (!cb) return { files, urls: [] };
-
-  // 1) items 优先（覆盖微信截图、Snipaste、浏览器右键「复制图片」）
-  const items = (cb as DataTransfer).items as DataTransferItemList | undefined;
-  if (items && items.length) {
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      if (it.kind !== 'file') continue;
-      const f = it.getAsFile();
-      if (!f) continue;
-      const nf = _normalizeFile(f, it.type);
-      const k = _fp(nf);
-      if (!seen.has(k)) {
-        seen.add(k);
-        files.push(nf);
-      }
-    }
-  }
-
-  // 2) files 兜底（文件管理器复制、部分旧浏览器）
-  const fs = (cb as DataTransfer).files as FileList | undefined;
-  if (fs && fs.length) {
-    for (let i = 0; i < fs.length; i++) {
-      const nf = _normalizeFile(fs[i]);
-      const k = _fp(nf);
-      if (!seen.has(k)) {
-        seen.add(k);
-        files.push(nf);
-      }
-    }
-  }
-
-  // 3) 文本里的图片直链
-  let text = '';
-  try { text = (cb as DataTransfer).getData?.('text/plain') || ''; } catch { /* ignore */ }
-  const urls = extractImageUrls(text);
-  return { files, urls };
-};
-
-/** 消费 payload：有文件走文件上传（切 file 模式显示托盘中图片预览）；否则走网址上传 */
-const consumePayload = (p: PastePayload) => {
-  if (p.files.length > 0) {
-    mode.value = 'file';
-    fileListChange(p.files, true);
-    return true;
-  }
-  if (p.urls.length > 0) {
-    mode.value = 'url';
-    addUrls(p.urls);
-    toast({ title: 'Tips', description: `已识别并添加 ${p.urls.length} 张图片直链` });
-    return true;
-  }
-  return false;
-};
 
 // ---------- 入口 A：上传区域级 paste（捕获阶段 + stop，焦点在上传区域时最先消费） ----------
 const onUploadAreaPaste = (e: ClipboardEvent) => {
-  // 上传区域可聚焦（tabindex=0），用户点过上传区域后 Ctrl+V 会触发这里。
-  // 因为 @paste.capture.stop.prevent 了冒泡，不会再到 document paste（入口 B），不会重复。
-  if (!_acquirePasteLock(e.timeStamp)) return;
-  const consumed = consumePayload(extractPastePayload(e.clipboardData));
-  if (!consumed) {
-    toast({ title: 'Tips', description: '剪贴板中未找到图片或图片直链', variant: 'destructive' });
+  if (!acquirePasteLock(e.timeStamp)) return;
+  const files = extractFilesFromClipboard(e.clipboardData);
+  if (files.length > 0) {
+    mode.value = 'file';
+    fileListChange(files, true);
+    return;
   }
+  const urls = extractUrlsFromClipboard(e.clipboardData);
+  if (urls.length > 0) {
+    mode.value = 'url';
+    addUrls(urls);
+    toast({ title: 'Tips', description: `已识别并添加 ${urls.length} 张图片直链` });
+    return;
+  }
+  toast({ title: 'Tips', description: '剪贴板中未找到图片或图片直链', variant: 'destructive' });
 };
 
 // ---------- 入口 B：document 级 paste（兜底，页面任意位置 Ctrl+V） ----------
-//  只有当入口 A 没吞掉事件（焦点不在上传区域内的可聚焦控件上）时才会到这里。
-//  仍然要拦截输入框/文本域/可编辑：让用户正常编辑文本。
 const onDocumentPaste = (e: ClipboardEvent) => {
   const target = e.target as HTMLElement | null;
   if (target) {
     const tag = target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
-    // 焦点已经在上传区域内的可聚焦控件上（按钮等）→ 入口 A 会处理
+    // 焦点在上传区域内 → 入口 A 已处理（或 capture.stop 已经阻止冒泡到 document，但这里再兜一层）
     if (uploadAreaRef.value && uploadAreaRef.value.contains(target)) return;
   }
-  if (!_acquirePasteLock(e.timeStamp)) return;
-  consumePayload(extractPastePayload(e.clipboardData));
+  if (!acquirePasteLock(e.timeStamp)) return;
+  const files = extractFilesFromClipboard(e.clipboardData);
+  if (files.length > 0) {
+    mode.value = 'file';
+    fileListChange(files, true);
+    return;
+  }
+  const urls = extractUrlsFromClipboard(e.clipboardData);
+  if (urls.length > 0) {
+    mode.value = 'url';
+    addUrls(urls);
+    toast({ title: 'Tips', description: `已识别并添加 ${urls.length} 张图片直链` });
+  }
 };
 
 // ---------- 入口 C：主动「粘贴图片」按钮 → Async Clipboard API ----------
-//  即使 document paste 因浏览器策略不触发，点击按钮是用户手势，可以直接读剪贴板。
 const pasteFromClipboard = async () => {
   if (!navigator.clipboard?.read) {
     toast({ title: '提示', description: '当前浏览器不支持读取剪贴板，请改用 Ctrl+V 粘贴' });
@@ -547,34 +461,30 @@ const pasteFromClipboard = async () => {
   }
   pastingClipboard.value = true;
   try {
-    const items = await navigator.clipboard.read();
+    const cbi = await navigator.clipboard.read();
     const files: File[] = [];
     const seen = new Set<string>();
-    for (const item of items) {
-      for (const t of item.types) {
+    for (const it of cbi) {
+      for (const t of it.types) {
         if (!t.startsWith('image/')) continue;
         try {
-          const blob = await item.getType(t);
+          const blob = await it.getType(t);
           const f = new File([blob], `clipboard-${Date.now()}.${t.split('/')[1] || 'png'}`, { type: t });
-          const k = _fp(f);
-          if (!seen.has(k)) {
-            seen.add(k);
-            files.push(f);
-          }
+          const k = `${f.size}|${f.type}`;
+          if (!seen.has(k)) { seen.add(k); files.push(f); }
         } catch { /* 单个 type 取失败不影响其他 */ }
       }
     }
     if (files.length > 0) {
-      _acquirePasteLock(Date.now());
+      if (!acquirePasteLock(Date.now())) return;
       mode.value = 'file';
       fileListChange(files, true);
     } else {
-      // 没取到图片，再尝试纯文本里的直链（兜底）
       let text = '';
       try { text = (await navigator.clipboard.readText()) || ''; } catch { /* ignore */ }
       const urls = extractImageUrls(text);
       if (urls.length > 0) {
-        _acquirePasteLock(Date.now());
+        if (!acquirePasteLock(Date.now())) return;
         mode.value = 'url';
         addUrls(urls);
         toast({ title: 'Tips', description: `已识别并添加 ${urls.length} 张图片直链` });
