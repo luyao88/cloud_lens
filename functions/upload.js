@@ -1,10 +1,13 @@
 /**
  * /upload 路由处理
  *
- * 接收前端上传的图片/视频文件，转发到 Imgur API 进行存储。
+ * 接收前端上传的图片/视频文件或图片网址，转发到 Imgur API 进行存储。
  * 使用 Client-ID 匿名上传，无需用户登录 Imgur。
  *
- * 请求：POST /upload，FormData { file: 图片/视频文件 }
+ * 请求：POST /upload，FormData:
+ *   - 文件上传: { file: 图片/视频文件 }
+ *   - 网址上传: { url: 图片网址（http(s)://...） }
+ *
  * 响应：
  *   200 Imgur API 返回的 JSON，包含 data.link（图片/视频地址）、data.id 等
  *   400 { success: false, error: '缺少 file 字段' }
@@ -68,16 +71,22 @@ export async function onRequestOptions({ request, env }) {
 
 export async function onRequestPost({ request, env }) {
   // 仅处理 POST：GET /upload 由前端路由接管（Cloudflare Pages 自动 fallback 到 index.html）
-  // 解析表单，取出文件
-  let imgFile;
+  // 解析表单，取出 file / url 字段
+  let formData;
   try {
-    const formData = await request.formData();
-    imgFile = formData.get('file');
+    formData = await request.formData();
   } catch {
     return json({ success: false, error: '无效的表单数据' }, 400, request, env);
   }
+
+  const urlField = formData.get('url');
+  if (urlField && typeof urlField === 'string' && urlField.trim()) {
+    return uploadByUrl(urlField.trim(), request, env);
+  }
+
+  const imgFile = formData.get('file');
   if (!imgFile) {
-    return json({ success: false, error: '缺少 file 字段' }, 400, request, env);
+    return json({ success: false, error: '缺少 file 或 url 字段' }, 400, request, env);
   }
 
   // 类型校验：MIME 优先，空 MIME 时按扩展名兜底
@@ -114,6 +123,52 @@ export async function onRequestPost({ request, env }) {
     return json(data, 200, request, env);
   } catch {
     // workerd 网络层失败（如本地网络无法直连 Imgur）会抛出内部错误，这里转为明确的提示
+    return json({ success: false, error: '无法连接 Imgur 服务，请检查网络或代理设置' }, 502, request, env);
+  }
+}
+
+/**
+ * 网址上传分支：通过 Imgur /3/image 接口以 type=URL 方式抓取远端图片。
+ * 仅支持图片（Imgur 网址上传不支持视频）。先做基础校验：
+ *   - http/https 协议
+ *   - 解析得通 hostname
+ *   - 扩展名命中图片白名单（避免把 HTML 页面当图片转发，浪费 Imgur 配额）
+ * 之后不做服务端预取，让 Imgur 自行抓取并返回结果。
+ */
+async function uploadByUrl(urlStr, request, env) {
+  let parsed;
+  try {
+    parsed = new URL(urlStr);
+  } catch {
+    return json({ success: false, error: '网址格式无效' }, 400, request, env);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return json({ success: false, error: '仅支持 http/https 网址' }, 400, request, env);
+  }
+  if (!parsed.hostname) {
+    return json({ success: false, error: '网址缺少域名' }, 400, request, env);
+  }
+  // 扩展名校验：忽略 query/hash，按 pathname 判定
+  if (!IMAGE_EXT_RE.test(parsed.pathname)) {
+    return json({ success: false, error: '网址扩展名非图片，仅支持 jpg/png/gif/webp 等' }, 415, request, env);
+  }
+
+  const clientId = env.IMGUR_CLIENT_ID || 'd70305e7c3ac5c6';
+  const body = new FormData();
+  body.append('image', urlStr);
+  body.append('type', 'URL');
+  try {
+    const res = await fetch('https://api.imgur.com/3/image', {
+      method: 'POST',
+      headers: { Authorization: `Client-ID ${clientId}` },
+      body,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.data?.link) {
+      return json({ success: false, error: data?.data?.error || `Imgur 网址上传失败（HTTP ${res.status}）` }, res.status >= 400 ? res.status : 502, request, env);
+    }
+    return json(data, 200, request, env);
+  } catch {
     return json({ success: false, error: '无法连接 Imgur 服务，请检查网络或代理设置' }, 502, request, env);
   }
 }

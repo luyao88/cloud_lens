@@ -68,7 +68,7 @@
                     <div class="mini-progress">
                       <div class="mini-progress-fill" :style="{ width: item.upload_progress + '%' }"></div>
                     </div>
-                    <span class="meta-pct">{{ item.upload_progress }}%</span>
+                    <span class="meta-pct">{{ formatPct(item.upload_progress) }}%</span>
                   </template>
                   <span v-else-if="item.upload_status === 'uploading'" class="meta-queued">等待中</span>
                   <span v-else-if="item.upload_status === 'success'" class="meta-ok">
@@ -241,6 +241,9 @@ const formatSize = (size: number) => {
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)}KB`;
   return `${(size / 1024 / 1024).toFixed(2)}MB`;
 };
+
+// 进度格式化：精确到小数两位（网址上传心跳是浮点爬升，文件上传虽是整数但统一两位更整齐）
+const formatPct = (v: number) => v.toFixed(2);
 
 const copyLink = async (item: UploadItem) => {
   const url = formatURL({ nodeHost }, item.upload_result);

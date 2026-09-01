@@ -1,5 +1,25 @@
 <template>
-  <section class="Upload" :class="{ 'is-dragover': isDragover }" @dragover.prevent="onDragover" @dragenter.prevent="onDragenter" @dragleave.prevent="onDragleave" @drop.prevent="onDrop">
+  <!-- ===== Tab 切换器：文件 / 网址 ===== -->
+  <div class="upload-tabs" role="tablist">
+    <button class="tab" :class="{ active: mode === 'file' }" role="tab" :aria-selected="mode === 'file'" @click="mode = 'file'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+        <polyline points="14 2 14 8 20 8" />
+      </svg>
+      <span>文件上传</span>
+    </button>
+    <button class="tab" :class="{ active: mode === 'url' }" role="tab" :aria-selected="mode === 'url'" @click="mode = 'url'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </svg>
+      <span>网址上传</span>
+    </button>
+    <span class="tab-indicator" :class="`is-${mode}`"></span>
+  </div>
+
+  <!-- ===== 文件上传 ===== -->
+  <section v-show="mode === 'file'" class="Upload" :class="{ 'is-dragover': isDragover }" @dragover.prevent="onDragover" @dragenter.prevent="onDragenter" @dragleave.prevent="onDragleave" @drop.prevent="onDrop">
     <input type="file" multiple @change="fileListChange" :accept="UploadConfig.AcceptTypes" />
     <div class="placeholder">
       <div class="upload-icon-wrap">
@@ -18,6 +38,40 @@
         <span class="upload-title">{{ isDragover ? '释放即可上传' : '点击或拖拽上传文件' }}</span>
         <span class="upload-hint">{{ isDragover ? `检测到 ${dragoverCount} 个文件` : `支持图片和视频 · 最大 ${UploadConfig.MaxSize}MB · 最多 ${UploadConfig.Max} 张 · 可粘贴上传` }}</span>
       </p>
+    </div>
+  </section>
+
+  <!-- ===== 网址上传 ===== -->
+  <section v-show="mode === 'url'" class="Upload url-mode">
+    <div class="url-inner">
+      <div class="url-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      </div>
+      <textarea
+        v-model="urlInput"
+        class="url-textarea"
+        placeholder="粘贴图片直链，每行一个&#10;支持 https://example.com/photo.jpg&#10;也支持 Markdown 语法 ![alt](https://...)"
+        rows="4"
+        spellcheck="false"
+        @input="onUrlInput"
+        @keydown.meta.enter.prevent="submitUrls"
+        @keydown.ctrl.enter.prevent="submitUrls"></textarea>
+      <div class="url-bar">
+        <span class="url-hint" :class="{ 'is-empty': urlCount === 0, 'is-ok': urlCount > 0 }">
+          <template v-if="urlCount === 0">仅支持 jpg / png / gif / webp 等图片直链</template>
+          <template v-else>已识别 {{ urlCount }} 条图片网址</template>
+        </span>
+        <button class="url-submit" :disabled="urlCount === 0" @click="submitUrls">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14" />
+            <path d="m12 5 7 7-7 7" />
+          </svg>
+          <span>添加{{ urlCount > 0 ? ` ${urlCount} 张` : '' }}</span>
+        </button>
+      </div>
     </div>
   </section>
 
@@ -64,13 +118,39 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useToast } from '@/components/ui/toast/use-toast';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
-import { useUploadManager } from '@/composables/useUploadManager';
+import { useUploadManager, extractImageUrls } from '@/composables/useUploadManager';
 const { toast } = useToast();
 // 上传队列由全局管理器维护，切换页面不会中断
-const { items, addFiles, targetAlbum, setTargetAlbum, albums, albumTreeOptions, defaultAlbumId, fetchAlbums, refreshUploadState, uploadLoggedIn } = useUploadManager();
+const { items, addFiles, addUrls, targetAlbum, setTargetAlbum, albums, albumTreeOptions, defaultAlbumId, fetchAlbums, refreshUploadState, uploadLoggedIn } = useUploadManager();
 // 参数
 const props = defineProps(['UploadConfig']);
 const UploadConfig = ref<any>(props.UploadConfig);
+
+// ===== 上传模式：文件 / 网址 =====
+// 默认 file，保持原有行为；用户切到 url 时显示文本输入区
+type UploadMode = 'file' | 'url';
+const mode = ref<UploadMode>('file');
+
+// ===== 网址上传：textarea 输入与识别 =====
+const urlInput = ref('');
+// 实时识别 textarea 中合法的图片直链（去重后）
+const urlCount = computed(() => extractImageUrls(urlInput.value).length);
+
+const onUrlInput = () => {
+  // 输入驱动 urlCount 自动更新，这里仅作占位钩子，便于将来扩展
+};
+
+// 提交识别到的网址到上传队列
+const submitUrls = () => {
+  const urls = extractImageUrls(urlInput.value);
+  if (!urls.length) {
+    toast({ title: 'Tips', description: '未识别到合法的图片直链' });
+    return;
+  }
+  addUrls(urls);
+  toast({ title: 'Tips', description: `已添加 ${urls.length} 张到上传队列` });
+  urlInput.value = '';
+};
 
 // ===== 上传目标相册 =====
 // 登录态/相册表/同步中标志全部来自全局管理器：
@@ -288,10 +368,12 @@ const imgTypeFormat = async (files: File[]) => {
   return await Promise.all(_fileList.map(convertWebPToPNG));
 };
 
-// 粘贴上传
+// 粘贴上传：支持文件与图片直链
+// - 剪贴板含文件 → 走文件上传
+// - 剪贴板无文件但文本含 http(s) 图片直链 → 走网址上传（自动切到网址模式以便看到队列）
+// - 输入框/文本域/可编辑元素内的粘贴一律不拦截，让用户正常编辑文本
 const pasteUpload = (v: any) => {
   const target = v.target as HTMLElement;
-  // 输入框/文本域内的粘贴不拦截，让用户正常粘贴文本
   if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
     return;
   }
@@ -300,6 +382,18 @@ const pasteUpload = (v: any) => {
   if (files && files.length > 0) {
     v.preventDefault();
     fileListChange(files, true);
+    return;
+  }
+  // 无文件时检查文本是否含图片直链
+  const text = pasteData?.getData?.('text/plain') || '';
+  if (text) {
+    const urls = extractImageUrls(text);
+    if (urls.length > 0) {
+      v.preventDefault();
+      mode.value = 'url';
+      addUrls(urls);
+      toast({ title: 'Tips', description: `已从剪贴板识别并添加 ${urls.length} 张图片直链` });
+    }
   }
 };
 

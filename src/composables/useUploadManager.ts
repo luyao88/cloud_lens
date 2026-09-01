@@ -18,11 +18,12 @@ export type UploadStatus = 'uploading' | 'success' | 'error';
 export interface UploadItem {
   id: string;
   file: File | null;
+  source_url?: string; // 网址上传模式：远端图片 URL（与 file 互斥）
   name: string;
   size: number;
   upload_status: UploadStatus;
   upload_progress: number; // 0-100，XHR 真实进度
-  upload_blob: string; // 本地预览 URL（objectURL 或站点链接）
+  upload_blob: string; // 本地预览 URL（objectURL 或远端图片直链）
   upload_type: 'image' | 'video';
   upload_result: any; // Imgur 响应
   error?: string;
@@ -313,25 +314,108 @@ const uploadItem = (item: UploadItem) => {
   xhr.send(formData);
 };
 
+/**
+ * 网址上传分支：FormData 携带 url 字段，由服务端转发至 Imgur /3/image（type=URL）。
+ * 远端图片无需本地上传字节，xhr.upload.onprogress 不会触发；
+ * 故用"等待 + 节流心跳"模拟进度，避免列表里进度条长期卡 0% 显得停滞。
+ */
+const uploadItemByUrl = (item: UploadItem) => {
+  const url = item.source_url;
+  if (!url) return;
+  item.upload_status = 'uploading';
+  item.upload_progress = 5; // 起始 5%，避免视觉卡死在 0
+  item.error = '';
+  refreshOverallProgress();
+
+  const formData = new FormData();
+  formData.append('url', url);
+  const xhr = new XMLHttpRequest();
+  item.xhr = xhr;
+  xhr.open('POST', uploadAPI);
+
+  // 网址上传无 upload progress 事件，模拟缓慢爬升到 90% 上限
+  let heartbeat: ReturnType<typeof setInterval> | null = setInterval(() => {
+    if (item.upload_progress < 90) {
+      item.upload_progress = Math.min(90, item.upload_progress + Math.random() * 4 + 1);
+      refreshOverallProgress();
+    }
+  }, 600);
+
+  const clearHeart = () => {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+  };
+
+  xhr.onload = () => {
+    clearHeart();
+    item.xhr = null;
+    finishCurrent();
+    let result: any = null;
+    try {
+      result = JSON.parse(xhr.responseText);
+    } catch {
+      result = null;
+    }
+    if (xhr.status >= 200 && xhr.status < 300 && result?.data?.link) {
+      item.upload_progress = 100;
+      item.upload_result = { ...result, _vh_filename: item.name };
+      item.upload_status = 'success';
+      saveImage(item);
+    } else {
+      item.upload_status = 'error';
+      item.error = result?.error || (result ? `HTTP ${xhr.status}` : `服务异常（HTTP ${xhr.status}）`);
+      toast({ title: '网址上传失败', description: `${item.name}：${item.error}`, variant: 'destructive' });
+    }
+  };
+  xhr.onerror = () => {
+    clearHeart();
+    item.xhr = null;
+    finishCurrent();
+    item.upload_status = 'error';
+    item.error = '网络异常，连接中断';
+    toast({ title: '网址上传失败', description: `${item.name}：网络异常，连接中断`, variant: 'destructive' });
+  };
+  xhr.onabort = () => {
+    clearHeart();
+    if (item.xhr === xhr) {
+      item.xhr = null;
+      finishCurrent();
+    }
+  };
+  xhr.send(formData);
+};
+
 // 当前请求结束后，从队列取出下一个继续上传
 const finishCurrent = () => {
   activeCount.value--;
   const next = queue.shift();
   if (next) {
     activeCount.value++;
-    uploadItem(next);
+    startQueued(next);
   }
 };
 
 // 入口：先入队列，有空闲 slot 才真正发起请求
 const enqueueUpload = (item: UploadItem) => {
+  const start = () => {
+    if (item.source_url) uploadItemByUrl(item);
+    else uploadItem(item);
+  };
   if (activeCount.value < MAX_CONCURRENT) {
     activeCount.value++;
-    uploadItem(item);
+    start();
   } else {
     // 排队中：状态保持 uploading 但进度为 0，UI 上会显示"等待中"遮罩
     queue.push(item);
   }
+};
+
+// 排队项出队时调用：与 enqueueUpload 用同一分发逻辑
+const startQueued = (item: UploadItem) => {
+  if (item.source_url) uploadItemByUrl(item);
+  else uploadItem(item);
 };
 
 const releaseItem = (item: UploadItem) => {
@@ -388,7 +472,88 @@ const addFiles = (files: File[]) => {
 
 const retry = (id: string) => {
   const item = items.find((i) => i.id === id);
-  if (item?.file && item.upload_status === 'error') enqueueUpload(item);
+  if (item && item.upload_status === 'error' && (item.file || item.source_url)) enqueueUpload(item);
+};
+
+// ===== 网址上传入口 =====
+// 与 addFiles 对称：校验 URL → 创建条目 → 入队上传。
+// 复用同一份 items/queue/concurrency，与文件上传共享托盘与并发槽位。
+// 远端文件大小未知：size 暂置 0，进度由心跳模拟（详见 uploadItemByUrl）。
+const URL_IMAGE_EXT_RE = /\.(jpe?g|png|gif|apng|tiff?|bmp|webp|avif)$/i;
+
+/**
+ * 从一段文本中提取出所有看起来是图片直链的 URL。
+ * 用于：网址上传 textarea 多行粘贴 + 剪贴板文本自动入队。
+ * 规则：http(s):// 开头，pathname 以图片扩展名结尾（忽略 query/hash）。
+ */
+export const extractImageUrls = (text: string): string[] => {
+  if (!text) return [];
+  const lines = text.split(/\s+/);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of lines) {
+    const s = raw.trim();
+    if (!s) continue;
+    // 兼容用户粘贴 markdown 图片语法 ![alt](url) 与裸链接
+    const m = s.match(/^!?\[.*?\]\((https?:\/\/[^\s)]+)\)$/i) || s.match(/^(https?:\/\/[^\s)]+)$/i);
+    if (!m) continue;
+    const u = m[1];
+    try {
+      const p = new URL(u);
+      if (p.protocol !== 'http:' && p.protocol !== 'https:') continue;
+      if (!URL_IMAGE_EXT_RE.test(p.pathname)) continue;
+    } catch {
+      continue;
+    }
+    if (seen.has(u)) continue;
+    seen.add(u);
+    out.push(u);
+  }
+  return out;
+};
+
+const urlToFilename = (url: string): string => {
+  try {
+    const p = new URL(url);
+    const base = p.pathname.split('/').filter(Boolean).pop() || 'remote-image';
+    return decodeURIComponent(base);
+  } catch {
+    return 'remote-image';
+  }
+};
+
+const addUrls = (urls: string[]) => {
+  if (!urls.length) return;
+  if (urls.length > 100) {
+    toast({
+      title: '上传数量限制',
+      description: '单次网址上传上限100条',
+      variant: 'destructive',
+    });
+    return;
+  }
+  const newItems: UploadItem[] = [];
+  urls.forEach((url) => {
+    const item: UploadItem = reactive({
+      id: genId(),
+      file: null,
+      source_url: url,
+      name: urlToFilename(url),
+      size: 0,
+      upload_status: 'uploading',
+      upload_progress: 0,
+      // 远端图片直接作为预览 URL（<img> 不受 CORS 限制）
+      upload_blob: url,
+      upload_type: 'image',
+      upload_result: null,
+      xhr: null,
+      db_image_id: undefined,
+      saved_album_id: undefined,
+    });
+    items.unshift(item);
+    newItems.push(item);
+  });
+  newItems.reverse().forEach((item) => enqueueUpload(item));
 };
 
 const removeItem = (id: string) => {
@@ -445,6 +610,7 @@ export const useUploadManager = () => ({
   items,
   nodeHost,
   addFiles,
+  addUrls,
   retry,
   removeItem,
   setItems,
