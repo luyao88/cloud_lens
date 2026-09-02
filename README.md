@@ -16,11 +16,11 @@ English | [简体中文](https://github.com/luyao88/cloud_lens/blob/main/README_
 
 **Vercel Automated Deployment**
 
-[→ Deploy with Vercel](https://vercel.com/new/clone?repository-url=https://github.com/luyao88/cloud_lens)
+[![Deploy with Vercel](public/deploy-vercel.svg)](https://vercel.com/new/clone?repository-url=https://github.com/luyao88/cloud_lens)
 
 **Cloudflare Pages automatic deployment**
 
-[→ Deploy with Cloudflare](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create/deploy-to-workers&repository=https://github.com/luyao88/cloud_lens)
+[![Deploy to Cloudflare](public/deploy-cloudflare.svg)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create/deploy-to-workers&repository=https://github.com/luyao88/cloud_lens)
 
 ### Manual Deployment
 
@@ -59,10 +59,12 @@ Create a D1 database in Cloudflare Dashboard, execute the `cloud_lens_data.sql` 
 ### Upload & Storage
 
 - Unlimited image and video storage, uploaded to `Imgur`
-- Single upload limit of 100 files, with prompt and stop when exceeded
-- Supported image formats: JPEG, PNG, GIF, APNG, TIFF, BMP, WebP (auto-convert to PNG)
+- Multiple upload methods: drag-and-drop, click, paste, and URL (remote image) upload
+- Single upload limit of 100 files (or 100 URLs), with prompt and stop when exceeded
+- Per-file size limit: images up to 20MB, videos up to 100MB
+- Supported image formats: JPEG, PNG, GIF, APNG, TIFF, BMP, WebP, AVIF (auto-convert to PNG)
 - Supported video formats: MP4, WebM, AVI, MOV, MKV, FLV, WMV, MPEG
-- Concurrent upload throttling (3 concurrent), queue management, drag-and-drop, click, and paste upload
+- Concurrent upload throttling (3 concurrent), queue management
 - Floating upload tray with real-time progress, auto-collapse on completion
 
 ### User System

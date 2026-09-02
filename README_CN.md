@@ -6,7 +6,7 @@
 
 ## 页面
 
-![镜云图床](https://cloudlens.190223.xyz/v2/AJ1Rixh.png)
+![镜云图床](https://cloudlens.190223.xyz/v2/fDkPQ3L.png)
 
 [点击体验 Demo](https://cloudlens.190223.xyz/)
 
@@ -16,11 +16,11 @@
 
 **Vercel 自动部署**
 
-[![镜云图床](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/luyao88/cloud_lens)
+[![Deploy with Vercel](public/deploy-vercel.svg)](https://vercel.com/new/clone?repository-url=https://github.com/luyao88/cloud_lens)
 
 **Cloudflare Pages 自动部署**
 
-[![镜云图床](https://deploy.workers.cloudflare.com/button)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create/deploy-to-workers&repository=https://github.com/luyao88/cloud_lens)
+[![Deploy to Cloudflare](public/deploy-cloudflare.svg)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create/deploy-to-workers&repository=https://github.com/luyao88/cloud_lens)
 
 ### 手动部署
 
@@ -59,10 +59,12 @@
 ### 上传与存储
 
 - 无限图片和视频储存数量，上传至 `Imgur`
-- 单次上传上限 100 张文件，超过时提示并停止上传
-- 支持图片格式：JPEG、PNG、GIF、APNG、TIFF、BMP、WebP（自动转 PNG）
+- 多种上传方式：拖拽、点击、粘贴、网址（URL）上传
+- 单次上传上限 100 张文件（或 100 条网址），超过时提示并停止上传
+- 单文件大小限制：图片最大 20MB、视频最大 100MB
+- 支持图片格式：JPEG、PNG、GIF、APNG、TIFF、BMP、WebP、AVIF（自动转 PNG）
 - 支持视频格式：MP4、WebM、AVI、MOV、MKV、FLV、WMV、MPEG
-- 并发限流上传（3 并发），排队管理，支持拖拽、点击、粘贴上传
+- 并发限流上传（3 并发），排队管理
 - 悬浮上传托盘，实时进度展示，上传完成自动收起
 
 ### 用户系统
