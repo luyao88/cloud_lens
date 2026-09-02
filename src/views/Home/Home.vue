@@ -47,7 +47,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
           清空
         </button>
-        <button class="btn-ghost" @click="vh.CopyText(items.filter((i: any) => i.upload_status === 'success' && i.upload_blob).map((i: any) => i.upload_blob).join('\n'))">
+        <button class="btn-ghost" @click="copyAllLinks">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect width="14" height="14" x="8" y="8" rx="2" />
             <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
@@ -102,12 +102,44 @@
 <script setup lang="ts">
 defineOptions({ name: 'Home' });
 import vh from 'vh-plugin';
+import { formatURL } from '@/utils/index';
+import { useToast } from '@/components/ui/toast/use-toast';
 import { ref } from 'vue';
 import Upload from '@/components/Upload/Upload.vue';
 import ResList from '@/components/ResList/ResList.vue';
 import { useUploadManager } from '@/composables/useUploadManager';
 // 上传队列由全局管理器维护：切页不中断，进度在右下角悬浮托盘展示
+const { toast } = useToast();
 const { items, setItems, nodeHost } = useUploadManager();
+
+// 复制全部成功上传文件的对外代理链接（/v2/xxx），不要复制本地 blob 预览地址
+const copyAllLinks = async () => {
+  const urls: string[] = [];
+  for (const i of items) {
+    const it = i as any;
+    if (it.upload_status !== 'success' || !it.upload_result) continue;
+    const u = formatURL({ nodeHost }, it.upload_result);
+    if (u && !u.includes('上传失败')) urls.push(u);
+  }
+  if (!urls.length) {
+    toast({ title: 'Tips', description: '暂无可复制的链接' });
+    return;
+  }
+  let ok = false;
+  try {
+    await navigator.clipboard.writeText(urls.join('\n'));
+    ok = true;
+  } catch {
+    const t = document.createElement('textarea');
+    t.value = urls.join('\n');
+    document.body.appendChild(t);
+    t.select();
+    ok = document.execCommand('copy');
+    document.body.removeChild(t);
+  }
+  if (ok) toast({ title: 'Tips', description: `已复制 ${urls.length} 条链接` });
+  else toast({ title: 'Tips', description: urls.join('\n') });
+};
 // 上传配置
 const UploadConfig = ref<any>({
   AcceptTypes: 'image/jpeg,image/png,image/gif,image/apng,image/tiff,image/bmp,image/webp,video/mp4,video/webm', // Imgur匿名上传实际支持的格式（MOV/AVI/MKV会被Imgur拒绝）

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <!-- ===== Tab 切换器：文件 / 网址 ===== -->
   <div class="upload-tabs" role="tablist">
     <button class="tab" :class="{ active: mode === 'file' }" role="tab" :aria-selected="mode === 'file'" @click="mode = 'file'">
@@ -206,7 +206,15 @@ const defaultAlbumLabel = computed(() => {
 const authOpen = ref(false);
 const requireLogin = (): boolean => {
   if (uploadLoggedIn.value) return true;
-  authOpen.value = true;
+  // 优先通知父容器（Header 右侧抽屉等）：先关闭抽屉再打开登录弹窗；
+  // 外部处理器若调用了 preventDefault，则认为它会接管打开登录弹窗；
+  // 否则（如首页直接使用 Upload 的场景），回退为内部直接打开登录弹窗。
+  const notPrevented = window.dispatchEvent(
+    new CustomEvent('upload:require-login', { cancelable: true }),
+  );
+  if (notPrevented) {
+    authOpen.value = true;
+  }
   return false;
 };
 

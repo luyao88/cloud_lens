@@ -167,12 +167,36 @@ const handleLogout = async () => {
 // 登录状态变化（其他页面登录/退出）时同步刷新
 const onAuthChanged = () => fetchUser();
 
+// 抽屉滑出动画时长（对应 .upload-drawer-leave-active: 0.3s），留少许余量
+const DRAWER_LEAVE_MS = 320;
+let authOpenTimer: number | null = null;
+
+// Upload 组件未登录时发起：先关闭右侧上传抽屉，待抽屉关闭动画结束后再打开登录弹窗
+const onUploadRequireLogin = (e: Event) => {
+  if (!(e instanceof CustomEvent)) return;
+  e.preventDefault(); // 告知 Upload 组件：登录弹窗由本组件接管，无需自行弹出
+  if (authOpenTimer) {
+    window.clearTimeout(authOpenTimer);
+    authOpenTimer = null;
+  }
+  if (uploadOpen.value) {
+    uploadOpen.value = false;
+    authOpenTimer = window.setTimeout(() => {
+      authOpenTimer = null;
+      authOpen.value = true;
+    }, DRAWER_LEAVE_MS);
+  } else {
+    authOpen.value = true;
+  }
+};
+
 onMounted(async () => {
   await fetchUser();
 
   // 点击外部关闭下拉菜单
   document.addEventListener('click', closeMenu);
   window.addEventListener('auth:changed', onAuthChanged);
+  window.addEventListener('upload:require-login', onUploadRequireLogin);
 });
 
 const closeMenu = (e: MouseEvent) => {
@@ -184,6 +208,11 @@ const closeMenu = (e: MouseEvent) => {
 onUnmounted(() => {
   document.removeEventListener('click', closeMenu);
   window.removeEventListener('auth:changed', onAuthChanged);
+  window.removeEventListener('upload:require-login', onUploadRequireLogin);
+  if (authOpenTimer) {
+    window.clearTimeout(authOpenTimer);
+    authOpenTimer = null;
+  }
 });
 </script>
 <style scoped>
