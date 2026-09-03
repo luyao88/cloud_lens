@@ -17,6 +17,14 @@
               <span class="tray-summary">{{ summaryText }}</span>
             </div>
             <div class="tray-actions">
+              <button v-if="pendingCount > 0" class="tray-upload-all" title="上传全部待上传项" @click="startPending()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 13v8" />
+                  <path d="m8 17 4-4 4 4" />
+                  <path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25" />
+                </svg>
+                上传全部（{{ pendingCount }}）
+              </button>
               <button v-if="successCount || errorCount" class="tray-icon-btn" title="清除已完成" @click="clearFinished">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -77,10 +85,23 @@
                     </svg>
                     {{ formatSize(item.size) }}
                   </span>
+                  <span v-else-if="item.upload_status === 'pending'" class="meta-pending">待上传</span>
                   <span v-else class="meta-err" :title="item.error">{{ item.error }}</span>
                 </div>
               </div>
               <div class="tray-item-actions">
+                <button v-if="item.upload_status === 'pending'" class="tray-icon-btn accent" title="上传" @click="startItem(item.id)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 13v8" />
+                    <path d="m8 17 4-4 4 4" />
+                    <path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25" />
+                  </svg>
+                </button>
+                <button v-if="item.upload_status === 'pending'" class="tray-icon-btn" title="移除" @click="removeItem(item.id)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
                 <button v-if="item.upload_status === 'success'" class="tray-icon-btn" title="复制链接" @click="copyLink(item)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
@@ -118,13 +139,18 @@
       </Transition>
 
       <!-- 悬浮球 -->
-      <button class="tray-fab" :class="{ 'is-error': !hasActive && errorCount > 0 }" :title="fabTitle" @click="toggleExpanded">
+      <button class="tray-fab" :class="{ 'is-error': !hasActive && pendingCount === 0 && errorCount > 0 }" :title="fabTitle" @click="toggleExpanded">
         <span class="fab-ring" :style="{ background: ringBackground }"></span>
         <span class="fab-core">
           <svg v-if="hasActive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
             <path d="M12 12v9" />
             <path d="m8 17 4-4 4 4" />
+          </svg>
+          <svg v-else-if="pendingCount > 0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 13v8" />
+            <path d="m8 17 4-4 4 4" />
+            <path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25" />
           </svg>
           <svg v-else-if="errorCount > 0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10" />
@@ -135,7 +161,7 @@
             <path d="M20 6 9 17l-5-5" />
           </svg>
         </span>
-        <span v-if="fabBadge" class="fab-badge" :class="{ 'is-error': !hasActive && errorCount > 0 }">{{ fabBadge }}</span>
+        <span v-if="fabBadge" class="fab-badge" :class="{ 'is-error': !hasActive && pendingCount === 0 && errorCount > 0, 'is-pending': !hasActive && pendingCount > 0 }">{{ fabBadge }}</span>
       </button>
     </div>
   </Transition>
@@ -147,7 +173,7 @@ import { useToast } from '@/components/ui/toast/use-toast';
 import { useUploadManager, type UploadItem } from '@/composables/useUploadManager';
 
 const { toast } = useToast();
-const { items, nodeHost, retry, removeItem, clearFinished, uploadingCount, queuedCount, errorCount, successCount, hasActive, overallProgress } =
+const { items, nodeHost, retry, removeItem, clearFinished, uploadingCount, queuedCount, errorCount, successCount, pendingCount, hasActive, overallProgress, startItem, startPending } =
   useUploadManager();
 
 const expanded = ref(false);
@@ -176,7 +202,7 @@ const toggleExpanded = () => {
 // 有上传任务时不自动隐藏；全部成功且未展开时 3 秒后自动收起，存在失败则保留提醒
 const scheduleAutoHide = () => {
   setTimeout(() => {
-    if (!hasActive.value && !expanded.value && errorCount.value === 0) dismissed.value = true;
+    if (!hasActive.value && !expanded.value && errorCount.value === 0 && pendingCount.value === 0) dismissed.value = true;
   }, 3000);
 };
 watch(

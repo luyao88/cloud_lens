@@ -64,6 +64,25 @@
         </div>
       </div>
 
+      <!-- 上传设置 -->
+      <div class="settings-section">
+        <div class="section-title">上传设置</div>
+        <div class="card-row">
+          <div class="row-label">
+            <div class="row-title">上传模式</div>
+            <div class="row-desc">
+              {{ uploadMode === 'staged' ? '选择 / 粘贴 / 拖拽后先暂存为“待上传”，确认后再统一上传' : '选择 / 粘贴 / 拖拽后立即自动上传' }}
+            </div>
+          </div>
+          <div class="row-value">
+            <div class="seg-control" role="group" aria-label="上传模式">
+              <button type="button" class="seg-btn" :class="{ active: uploadMode === 'instant' }" @click="setUploadMode('instant')">即时上传</button>
+              <button type="button" class="seg-btn" :class="{ active: uploadMode === 'staged' }" @click="setUploadMode('staged')">暂存后确认</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 账号操作 -->
       <div class="settings-section">
         <div class="section-title">账号操作</div>
@@ -339,6 +358,9 @@ import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast/use-toast';
 import { resolveAvatarSrc } from '@/utils';
+import { useUploadManager } from '@/composables/useUploadManager';
+
+const { uploadMode, setUploadMode } = useUploadManager();
 
 const { toast } = useToast();
 const nodeHost = import.meta.env.VITE_IMG_API_URL || location.origin;

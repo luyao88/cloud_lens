@@ -151,6 +151,62 @@
     }
   }
 
+  // ============ 上传目标相册栏（与首页 Upload 组件一致） ============
+  .upload-album-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    margin: 0.625rem 0 1rem;
+    padding: 0.55rem 0.875rem;
+    background: var(--bg-card-light);
+    border: 1px solid var(--border-base);
+    border-radius: 0.875rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+    &:hover {
+      border-color: rgba(3, 182, 170, 0.35);
+    }
+
+    .album-bar-icon {
+      width: 1.05rem;
+      height: 1.05rem;
+      flex-shrink: 0;
+      color: #03b6aa;
+    }
+
+    .album-bar-label {
+      flex-shrink: 0;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .album-select {
+      flex: 1;
+      min-width: 0;
+      height: 2.1rem;
+      padding: 0 0.625rem;
+      font-size: 0.8rem;
+      font-family: inherit;
+      color: var(--text-primary);
+      background: var(--bg-input, transparent);
+      border: 1px solid var(--border-base);
+      border-radius: 0.5rem;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s ease;
+
+      &:hover {
+        border-color: rgba(3, 182, 170, 0.4);
+      }
+
+      &:focus {
+        border-color: #03b6aa;
+      }
+    }
+  }
+
   // ============ 视频预览 ============
   .video-preview {
     margin: 1rem 0;

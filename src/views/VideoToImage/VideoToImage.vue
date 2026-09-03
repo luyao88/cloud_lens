@@ -26,6 +26,24 @@
       </div>
     </div>
 
+    <!-- 上传目标相册：与首页上传共用同一份设置（localStorage 持久化） -->
+    <div class="upload-album-bar">
+      <svg class="album-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <circle cx="9" cy="9" r="2" />
+        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+      </svg>
+      <span class="album-bar-label">上传到</span>
+      <select class="album-select" :value="selectValue" @change="onSelectChange">
+        <option value="default">跟随默认（{{ defaultAlbumLabel }}）</option>
+        <option value="none">未分组</option>
+        <option v-for="opt in albumOptions" :key="opt.id" :value="String(opt.id)">{{ opt.label }}</option>
+      </select>
+    </div>
+
+    <!-- 未登录操作相册时弹出的登录弹窗 -->
+    <AuthDialog v-model:open="authOpen" @success="onAuthDialogSuccess" />
+
     <!-- 视频预览 -->
     <div v-if="videoUrl" class="video-preview">
       <video :ref="setVideoRef" :src="videoUrl" controls crossorigin="anonymous" @loadedmetadata="handleLoadedMetadata" @timeupdate="handleTimeUpdate"></video>
@@ -204,9 +222,48 @@
   </section>
 </template>
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useToast } from '@/components/ui/toast/use-toast';
+import AuthDialog from '@/components/AuthDialog/AuthDialog.vue';
+import { useUploadManager } from '@/composables/useUploadManager';
+import { formatURL } from '@/utils/index';
 const { toast } = useToast();
+
+// ===== 共享上传管理器：相册归属 / 上传托盘进度 / 数据库记录 全部自动处理 =====
+const { items, addFiles, targetAlbum, setTargetAlbum, albums, albumTreeOptions, defaultAlbumId, uploadLoggedIn, nodeHost, refreshUploadState } = useUploadManager();
+
+// ===== 上传目标相册（与首页上传一致） =====
+const albumOptions = albumTreeOptions;
+const selectValue = computed(() => (targetAlbum.value === undefined ? 'default' : targetAlbum.value === null ? 'none' : String(targetAlbum.value)));
+const defaultAlbumLabel = computed(() => {
+  if (defaultAlbumId.value === null) return '未分组';
+  const hit = albums.value.find((a) => a.id === defaultAlbumId.value);
+  return hit?.name || '未分组';
+});
+
+const authOpen = ref(false);
+const onAuthDialogSuccess = () => {
+  // 通知共享管理器刷新登录态与相册列表
+  window.dispatchEvent(new Event('auth:changed'));
+};
+const onSelectChange = (e: Event) => {
+  const el = e.target as HTMLSelectElement;
+  if (!uploadLoggedIn.value) {
+    // 与首页一致：未登录不允许选择相册，回滚选择并弹出登录
+    el.value = selectValue.value;
+    authOpen.value = true;
+    return;
+  }
+  const v = el.value;
+  if (v === 'default') setTargetAlbum(undefined);
+  else if (v === 'none') setTargetAlbum(null);
+  else setTargetAlbum(Number(v));
+};
+
+onMounted(() => {
+  // 拉取登录态 + 相册列表（共享管理器内部有缓存，不会重复请求）
+  refreshUploadState();
+});
 
 const videoFile = ref<File | null>(null);
 const videoUrl = ref<string>('');
@@ -388,26 +445,54 @@ const generateGIF = () => {
   });
 };
 
-// 上传到Imgur
+// 上传到图床（走共享上传管理器：相册归属 / 上传托盘进度 / 数据库记录 全部自动处理）
 const uploadToImgur = async (result: { url: string; name: string }) => {
+  let blob: Blob;
   try {
-    toast({ title: 'Uploading', description: 'Uploading to Imgur...' });
-    const blob = await fetch(result.url).then((r) => r.blob());
-    const formData = new FormData();
-    formData.append('file', blob, result.name);
-    const res = await fetch('/upload', {
-      method: 'POST',
-      body: formData,
-    });
-    const json = await res.json();
-    if (json.data && json.data.link) {
-      const imgurUrl = json.data.link;
-      await navigator.clipboard.writeText(imgurUrl);
-      toast({ title: 'Success', description: 'Uploaded & URL copied' });
-    }
-  } catch (err) {
-    toast({ title: 'Error', description: 'Upload failed' });
+    blob = await fetch(result.url).then((r) => r.blob());
+  } catch {
+    toast({ title: 'Error', description: '读取生成结果失败' });
+    return;
   }
+  const ext = result.name.split('.').pop()?.toLowerCase() || 'gif';
+  const mime = blob.type || (ext === 'webp' ? 'image/webp' : ext === 'jpg' ? 'image/jpeg' : `image/${ext}`);
+  const file = new File([blob], result.name, { type: mime });
+
+  const countBefore = items.length;
+  addFiles([file]);
+  if (items.length === countBefore) {
+    // 被 3 秒窗口指纹去重拦截（重复点击上传同一结果）
+    toast({ title: 'Tips', description: '相同文件刚刚已加入上传队列，请勿重复上传' });
+    return;
+  }
+  // addFiles 会把新条目 unshift 到列表顶部
+  const item = items[0];
+  if (item.upload_status === 'pending') {
+    toast({ title: 'Tips', description: '已加入暂存队列，可在上传托盘中点击开始上传' });
+    return;
+  }
+  toast({ title: 'Uploading', description: '已加入上传队列，上传中...' });
+  // 上传完成后复制本站 /v2/ 直链（不再复制 Imgur 原链，国内可直接打开）
+  const stopWatch = watch(
+    () => item.upload_status,
+    async (status) => {
+      if (status !== 'success' && status !== 'error') return;
+      stopWatch();
+      if (status === 'error') {
+        toast({ title: 'Error', description: `上传失败：${item.error || '未知错误'}` });
+        return;
+      }
+      const siteUrl = formatURL({ nodeHost }, item.upload_result);
+      try {
+        await navigator.clipboard.writeText(siteUrl);
+        toast({ title: 'Success', description: '上传成功，本站直链已复制' });
+      } catch {
+        // 剪贴板不可用（如手机非手势调用）：不显示长 URL，引导到上传托盘复制
+        toast({ title: 'Success', description: '上传成功，可在上传托盘中复制链接' });
+      }
+    },
+    { immediate: true },
+  );
 };
 
 // 下载

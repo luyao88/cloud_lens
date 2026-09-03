@@ -742,20 +742,35 @@ const fetchImages = async (offset = 0) => {
 };
 
 // ===== 实体相册 =====
-const fetchAlbums = async () => {
+const fetchAlbums = async (opts: { silent?: boolean } = {}) => {
   try {
     const res = await fetch('/api/albums');
-    if (res.status === 401) return;
-    const data = await res.json();
+    if (res.status === 401) return; // 未登录时静默，由 init 阶段统一处理登出状态
+    // 先读文本再尝试 JSON，避免 500/404 返回 HTML 时 json() 直接抛异常导致静默
+    const text = await res.text();
+    let data: any;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { success: false, error: `服务器返回非 JSON 内容 (HTTP ${res.status})` };
+    }
     if (data.success) {
       realAlbums.value = data.albums || [];
       ungroupedCount.value = data.ungrouped_count || 0;
       defaultAlbumId.value = data.default_album_id ?? null;
     } else {
-      console.warn('fetchAlbums failed:', data.error || res.status);
+      const msg = data.error || `获取相册列表失败 (HTTP ${res.status})`;
+      console.warn('[fetchAlbums] failed:', msg);
+      if (!opts.silent) {
+        toast({ title: '加载相册失败', description: msg, variant: 'destructive' });
+      }
     }
   } catch (e) {
-    console.warn('fetchAlbums network error:', e);
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('[fetchAlbums] network error:', msg);
+    if (!opts.silent) {
+      toast({ title: '加载相册失败', description: '网络错误，请稍后刷新重试', variant: 'destructive' });
+    }
   }
 };
 
@@ -844,24 +859,41 @@ const submitAlbumDialog = async () => {
   const name = albumNameInput.value.trim();
   if (!name || albumSubmitting.value) return;
   albumSubmitting.value = true;
+  const isRename = albumDialogMode.value === 'rename';
+  const failTitle = isRename ? '保存失败' : '创建失败';
   try {
-    const isRename = albumDialogMode.value === 'rename';
     const res = await fetch(isRename ? `/api/albums/${activeAlbumId.value}` : '/api/albums', {
       method: isRename ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(isRename ? { name } : { name, parent_id: albumDialogMode.value === 'create-child' ? activeAlbumId.value : null }),
     });
-    const data = await res.json();
+    // 401: 登录态失效，退回登录态，避免假"创建成功"
+    if (res.status === 401) {
+      user.value = null;
+      albumDialogOpen.value = false;
+      toast({ title: failTitle, description: '登录已过期，请重新登录后再试', variant: 'destructive' });
+      return;
+    }
+    const text = await res.text();
+    let data: any;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { success: false, error: `服务器返回非 JSON 内容 (HTTP ${res.status})` };
+    }
     if (!data.success) {
-      toast({ title: isRename ? '保存失败' : '创建失败', description: data.error, variant: 'destructive' });
+      toast({ title: failTitle, description: data.error || `操作失败 (HTTP ${res.status})`, variant: 'destructive' });
       return;
     }
     albumDialogOpen.value = false;
+    // 创建/改名成功后显式刷新相册列表，失败时 toast 给出明确原因
     await fetchAlbums();
     notifyAlbumsChanged();
     toast({ title: 'Tips', description: isRename ? '相册已重命名' : `已创建「${name}」` });
-  } catch {
-    toast({ title: '操作失败', description: '网络错误，请稍后重试', variant: 'destructive' });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('[submitAlbumDialog] error:', msg);
+    toast({ title: failTitle, description: '网络错误，请稍后重试', variant: 'destructive' });
   } finally {
     albumSubmitting.value = false;
   }

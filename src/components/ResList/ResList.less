@@ -200,6 +200,113 @@
   }
 }
 
+// 暂存模式：待上传批量操作条
+.staged-bar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--border-base);
+  border-radius: 0.6rem;
+  background: var(--bg-accent);
+
+  & > .staged-bar-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #0d9488;
+
+    & > svg {
+      width: 1.05rem;
+      height: 1.05rem;
+    }
+  }
+
+  & > .staged-upload-all {
+    flex-shrink: 0;
+    padding: 0.4rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #fff;
+    background: #03b6aa;
+    border: none;
+    border-radius: 0.45rem;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+
+    &:hover {
+      background: #029b90;
+    }
+
+    &:active {
+      transform: scale(0.97);
+    }
+  }
+}
+
+// 暂存态：待上传条目内容
+.pending-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  height: 100%;
+
+  & > .pending-badge {
+    flex-shrink: 0;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #b45309;
+    background: rgba(251, 191, 36, 0.16);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    border-radius: 0.35rem;
+  }
+
+  & > .pending-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  & > .pending-upload {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #fff;
+    background: #03b6aa;
+    border: none;
+    border-radius: 0.45rem;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+
+    & > svg {
+      width: 0.95rem;
+      height: 0.95rem;
+    }
+
+    &:hover {
+      background: #029b90;
+    }
+
+    &:active {
+      transform: scale(0.97);
+    }
+  }
+}
+
 @media screen and (max-width: 640px) {
   .ResList {
     display: flex;

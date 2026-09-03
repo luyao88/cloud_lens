@@ -122,7 +122,8 @@ export const extractUrlsFromClipboard = (cb: DataTransfer | ClipboardEvent['clip
   return extractImageUrls(t);
 };
 
-export type UploadStatus = 'uploading' | 'success' | 'error';
+// pending = 暂存模式下"待上传"（已建条目，未入队）；其余为实际上传生命周期
+export type UploadStatus = 'pending' | 'uploading' | 'success' | 'error';
 
 export interface UploadItem {
   id: string;
@@ -314,6 +315,35 @@ const setTargetAlbum = (v: TargetAlbum) => {
 
 if (typeof window !== 'undefined') {
   targetAlbum.value = loadTargetAlbum();
+}
+
+// ===== 上传模式 =====
+// instant = 选择/粘贴/拖拽后立即上传（默认，保持既有行为）
+// staged  = 先暂存为"待上传"，由用户确认后再上传
+// 选择持久化到 localStorage，刷新后保持；跨上传实例（Home 面板 / Header 抽屉）共享
+export type UploadFlowMode = 'instant' | 'staged';
+const UPLOAD_MODE_KEY = 'cl_upload_mode';
+const uploadMode = ref<UploadFlowMode>('instant');
+
+const loadUploadMode = (): UploadFlowMode => {
+  try {
+    return localStorage.getItem(UPLOAD_MODE_KEY) === 'staged' ? 'staged' : 'instant';
+  } catch {
+    return 'instant';
+  }
+};
+
+const setUploadMode = (m: UploadFlowMode) => {
+  uploadMode.value = m;
+  try {
+    localStorage.setItem(UPLOAD_MODE_KEY, m);
+  } catch {
+    // localStorage 不可用时仅保留内存状态
+  }
+};
+
+if (typeof window !== 'undefined') {
+  uploadMode.value = loadUploadMode();
 }
 
 // 上传成功后保存到服务器（需要登录，未登录静默跳过，不影响上传结果）
@@ -578,6 +608,7 @@ const addFiles = (files: File[]) => {
 
   // 先创建所有条目并 unshift 到列表（最新项在前），再倒序入队上传
   // 这样列表顶部的项先上传，视觉上从上往下
+  const staged = uploadMode.value === 'staged';
   const newItems: UploadItem[] = [];
   filtered.forEach((file) => {
     // 用 reactive 包裹，确保 XHR 回调中修改属性能触发视图更新
@@ -587,7 +618,7 @@ const addFiles = (files: File[]) => {
       file,
       name: file.name || 'clipboard.png',
       size: file.size,
-      upload_status: 'uploading',
+      upload_status: staged ? 'pending' : 'uploading',
       upload_progress: 0,
       upload_blob: URL.createObjectURL(file),
       upload_type: file.type.startsWith('video/') ? 'video' : 'image',
@@ -599,6 +630,8 @@ const addFiles = (files: File[]) => {
     items.unshift(item);
     newItems.push(item);
   });
+  // 暂存模式：只建"待上传"条目，等待用户手动触发（startPending/startItem），不立即入队
+  if (staged) return;
   // 倒序入队：列表顶部的项（最后 unshift 的）先上传
   newItems.reverse().forEach((item) => enqueueUpload(item));
 };
@@ -606,6 +639,29 @@ const addFiles = (files: File[]) => {
 const retry = (id: string) => {
   const item = items.find((i) => i.id === id);
   if (item && item.upload_status === 'error' && (item.file || item.source_url)) enqueueUpload(item);
+};
+
+// ===== 暂存模式：手动触发上传 =====
+// 复用现有 enqueueUpload/队列/并发，仅把"待上传"(pending)转为 uploading 后入队。
+// startItem：上传单个条目；startPending：上传全部（或指定 id 集合）的待上传条目。
+const startItem = (id: string) => {
+  const item = items.find((i) => i.id === id);
+  if (!item || item.upload_status !== 'pending') return;
+  item.upload_status = 'uploading';
+  item.upload_progress = 0;
+  enqueueUpload(item);
+};
+
+const startPending = (ids?: string[]) => {
+  // items 数组顺序即列表展示顺序（顶部在前），按此顺序入队保证"从上往下"上传
+  const targets = ids
+    ? items.filter((i) => ids.includes(i.id) && i.upload_status === 'pending')
+    : items.filter((i) => i.upload_status === 'pending');
+  targets.forEach((item) => {
+    item.upload_status = 'uploading';
+    item.upload_progress = 0;
+    enqueueUpload(item);
+  });
 };
 
 // ===== 网址上传入口 =====
@@ -674,6 +730,7 @@ const addUrls = (urls: string[]) => {
     filtered.push(u);
   }
   if (!filtered.length) return;
+  const staged = uploadMode.value === 'staged';
   const newItems: UploadItem[] = [];
   filtered.forEach((url) => {
     const item: UploadItem = reactive({
@@ -682,7 +739,7 @@ const addUrls = (urls: string[]) => {
       source_url: url,
       name: urlToFilename(url),
       size: 0,
-      upload_status: 'uploading',
+      upload_status: staged ? 'pending' : 'uploading',
       upload_progress: 0,
       // 远端图片直接作为预览 URL（<img> 不受 CORS 限制）
       upload_blob: url,
@@ -695,6 +752,8 @@ const addUrls = (urls: string[]) => {
     items.unshift(item);
     newItems.push(item);
   });
+  // 暂存模式：只建"待上传"条目，等待用户手动触发，不立即入队
+  if (staged) return;
   newItems.reverse().forEach((item) => enqueueUpload(item));
 };
 
@@ -720,8 +779,10 @@ const setItems = (list: UploadItem[]) => {
 };
 
 const clearFinished = () => {
-  items.filter((i) => i.upload_status !== 'uploading').forEach(releaseItem);
-  setItems(items.filter((i) => i.upload_status === 'uploading'));
+  // 清除已完成/失败项，保留正在上传与暂存待上传的条目
+  const keep = (i: UploadItem) => i.upload_status === 'uploading' || i.upload_status === 'pending';
+  items.filter((i) => !keep(i)).forEach(releaseItem);
+  setItems(items.filter(keep));
 };
 
 // ===== 汇总状态（托盘展示用） =====
@@ -729,6 +790,7 @@ const uploadingCount = computed(() => items.filter((i) => i.upload_status === 'u
 const queuedCount = computed(() => queue.length);
 const errorCount = computed(() => items.filter((i) => i.upload_status === 'error').length);
 const successCount = computed(() => items.filter((i) => i.upload_status === 'success').length);
+const pendingCount = computed(() => items.filter((i) => i.upload_status === 'pending').length);
 const hasActive = computed(() => uploadingCount.value > 0);
 const hasSuccessUpload = computed(() => successCount.value > 0);
 // 总体进度：用 ref + 手动节流更新替代 computed，避免每次 progress 变化都遍历全量 items
@@ -738,7 +800,8 @@ const refreshOverallProgress = () => {
   const now = Date.now();
   if (now - overallProgressTs < 200) return; // 节流 200ms
   overallProgressTs = now;
-  const active = items.filter((i) => i.upload_status !== 'success');
+  // 暂存待上传项尚未开始，不计入进度；仅统计上传中/失败项
+  const active = items.filter((i) => i.upload_status !== 'success' && i.upload_status !== 'pending');
   if (!active.length) {
     overallProgress.value = 100;
     return;
@@ -761,6 +824,7 @@ export const useUploadManager = () => ({
   queuedCount,
   errorCount,
   successCount,
+  pendingCount,
   hasActive,
   hasSuccessUpload,
   overallProgress,
@@ -775,6 +839,10 @@ export const useUploadManager = () => ({
   stateSyncing,
   refreshUploadState,
   changeItemAlbum,
+  uploadMode,
+  setUploadMode,
+  startItem,
+  startPending,
 });
 
 // ===== 刷新前警告：上传中拦截 beforeunload，避免上传被打断 =====

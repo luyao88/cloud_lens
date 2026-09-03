@@ -296,6 +296,11 @@ onUnmounted(() => {
   .header-nav {
     display: none;
   }
+
+  /* 手机端：隐藏站名文本（镜云图床 CloudLens），仅保留 logo，避免宽度不够导致挤压 */
+  .title {
+    display: none;
+  }
 }
 
 /* GitHub 登录按钮 */
