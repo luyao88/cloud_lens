@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <section class="Profile">
     <!-- 加载中 -->
     <div v-if="loading" class="state-tip">加载中...</div>
@@ -1135,7 +1135,7 @@ const init = async () => {
   ungroupedCount.value = 0;
   await fetchUser();
   if (user.value) {
-    await Promise.all([fetchImages(0), fetchAlbums()]);
+    await Promise.all([fetchImages(0), fetchAlbums({ silent: true })]);
   }
   loading.value = false;
 };
